@@ -288,7 +288,12 @@ void QWaylandKeyboardPrivate::maybeUpdateKeymap()
 #if QT_CONFIG(xkbcommon)
 static int createAnonymousFile(size_t size)
 {
+#ifndef NO_WEBOS_PLATFORM
+    // See must be reverted in BHV-1362
+    QString path = QString(qgetenv("XDG_RUNTIME_DIR"));
+#else
     QString path = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+#endif
     if (path.isEmpty())
         return -1;
 
