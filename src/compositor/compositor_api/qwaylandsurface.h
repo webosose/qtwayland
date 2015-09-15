@@ -64,6 +64,7 @@ class QWaylandView;
 class QWaylandSurfaceOp;
 class QWaylandInputMethodControl;
 class QWaylandDrag;
+class QWaylandQuickItem;
 
 class QWaylandSurfaceRole
 {
@@ -131,6 +132,8 @@ public:
     void setPrimaryView(QWaylandView *view);
 
     QList<QWaylandView *> views() const;
+
+    QWaylandQuickItem *surfaceItem();
 
     static QWaylandSurface *fromResource(::wl_resource *resource);
     struct wl_resource *resource() const;

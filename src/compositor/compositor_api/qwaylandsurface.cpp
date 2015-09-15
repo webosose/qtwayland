@@ -50,6 +50,7 @@
 #endif
 
 #include "qwaylandinputmethodcontrol_p.h"
+#include "qwaylandquickitem.h"
 
 #include <QtWaylandCompositor/QWaylandCompositor>
 #include <QtWaylandCompositor/QWaylandClient>
@@ -737,6 +738,10 @@ QList<QWaylandView *> QWaylandSurface::views() const
 {
     Q_D(const QWaylandSurface);
     return d->views;
+}
+
+QWaylandQuickItem *QWaylandSurface::surfaceItem() {
+    return views().isEmpty() ? NULL : static_cast<QWaylandQuickItem*>(views().first()->renderObject());
 }
 
 /*!
