@@ -2,10 +2,14 @@ TEMPLATE=subdirs
 CONFIG+=ordered
 QT_FOR_CONFIG += waylandclient-private
 
-SUBDIRS += qwayland-generic
+config_no_webos {
+    SUBDIRS += qwayland-generic
+}
 
 qtConfig(wayland-egl): \
-    SUBDIRS += qwayland-egl
+    config_no_webos {
+        SUBDIRS += qwayland-egl
+    }
 
 #The following integrations are only useful with QtWaylandCompositor
 qtConfig(wayland-brcm): \
