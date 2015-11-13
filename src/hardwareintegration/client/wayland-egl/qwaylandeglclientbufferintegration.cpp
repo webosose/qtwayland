@@ -113,7 +113,13 @@ void QWaylandEglClientBufferIntegration::initialize(QWaylandDisplay *display)
         return;
     }
 
-    m_supportsThreading = true;
+    QByteArray threaded = qgetenv("WEBOS_GL_DISABLE_THREADED_RENDERING");
+    if (threaded.isEmpty()) {
+        m_supportsThreading = true;
+    } else {
+        m_supportsThreading = false;
+    }
+
     if (qEnvironmentVariableIsSet("QT_OPENGL_NO_SANITY_CHECK"))
         return;
 
