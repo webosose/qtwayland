@@ -68,6 +68,9 @@ class QWaylandInputDeviceIntegration;
 class QWaylandInputDevice;
 class QWaylandScreen;
 class QWaylandCursor;
+#if QT_CONFIG(draganddrop)
+class QWaylandDrag;
+#endif
 
 class Q_WAYLAND_CLIENT_EXPORT QWaylandIntegration : public QPlatformIntegration
 {
@@ -117,6 +120,9 @@ public:
 
     virtual QWaylandCursor *createPlatformCursor(QWaylandScreen *screen) const;
     virtual QWaylandScreen *createPlatformScreen(QWaylandDisplay *waylandDisplay, int version, uint32_t id) const;
+#if QT_CONFIG(draganddrop)
+    virtual QWaylandDrag *createPlatformDrag(QWaylandDisplay *waylandDisplay) const;
+#endif
 
     virtual QWaylandClientBufferIntegration *clientBufferIntegration() const;
     virtual QWaylandServerBufferIntegration *serverBufferIntegration() const;
