@@ -154,7 +154,7 @@ public:
     QWaylandAbstractDecoration *decoration() const;
 
     void handleMouse(QWaylandInputDevice *inputDevice, const QWaylandPointerEvent &e);
-    void handleMouseLeave(QWaylandInputDevice *inputDevice);
+    virtual void handleMouseLeave(QWaylandInputDevice *inputDevice);
 
     bool touchDragDecoration(QWaylandInputDevice *inputDevice, const QPointF &local, const QPointF &global,
                              Qt::TouchPointState state, Qt::KeyboardModifiers mods);
@@ -163,7 +163,7 @@ public:
 
 #if QT_CONFIG(cursor)
     void setMouseCursor(QWaylandInputDevice *device, const QCursor &cursor);
-    void restoreMouseCursor(QWaylandInputDevice *device);
+    virtual void restoreMouseCursor(QWaylandInputDevice *device);
 #endif
 
     QWaylandWindow *transientParent() const;
