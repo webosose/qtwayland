@@ -170,7 +170,12 @@ void QWaylandKeyboardPrivate::keyEvent(uint code, uint32_t state)
     uint key = code;
 #endif
     if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+
+#ifdef NO_WEBOS_PLATFORM
+        // In webos, there is no scence to pass pressed keys when switching focus
+        // Also, keymaps are always set before sendKeyEvent.
         keys << key;
+#endif
     } else {
         keys.removeAll(key);
     }
