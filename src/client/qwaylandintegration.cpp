@@ -71,7 +71,9 @@
 #include <QSocketNotifier>
 
 #include <qpa/qplatforminputcontextfactory_p.h>
+#if QT_CONFIG(accessibility)
 #include <qpa/qplatformaccessibility.h>
+#endif
 #include <qpa/qplatforminputcontext.h>
 
 #include "qwaylandhardwareintegration_p.h"
@@ -134,7 +136,7 @@ QWaylandIntegration::QWaylandIntegration(bool useCustomIntegration)
     , mDisplay(0)
     , mNativeInterface(0)
 #if QT_CONFIG(accessibility)
-    , mAccessibility(new QPlatformAccessibility())
+    , mAccessibility(0)
 #endif
 {
     if (!useCustomIntegration)
@@ -183,6 +185,10 @@ void QWaylandIntegration::initIntegration()
             mInputContext.reset(ctx);
         }
     }
+#if QT_CONFIG(accessibility)
+    if (!mAccessibility)
+        mAccessibility.reset(createPlatformAccessibility());
+#endif
 }
 
 QPlatformNativeInterface * QWaylandIntegration::nativeInterface() const
@@ -323,18 +329,25 @@ QPlatformTheme *QWaylandIntegration::createPlatformTheme(const QString &name) co
 
 QWaylandCursor *QWaylandIntegration::createPlatformCursor(QWaylandScreen *screen) const
 {
-   return new QWaylandCursor(screen);
+    return new QWaylandCursor(screen);
 }
 
 QWaylandScreen *QWaylandIntegration::createPlatformScreen(QWaylandDisplay *waylandDisplay, int version, uint32_t id) const
 {
-   return new QWaylandScreen(waylandDisplay, version, id);
+    return new QWaylandScreen(waylandDisplay, version, id);
 }
 
 #if QT_CONFIG(draganddrop)
 QWaylandDrag *QWaylandIntegration::createPlatformDrag(QWaylandDisplay *waylandDisplay) const
 {
-   return new QWaylandDrag(waylandDisplay);
+    return new QWaylandDrag(waylandDisplay);
+}
+#endif
+
+#if QT_CONFIG(accessibility)
+QPlatformAccessibility *QWaylandIntegration::createPlatformAccessibility() const
+{
+    return new QPlatformAccessibility();
 }
 #endif
 

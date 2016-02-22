@@ -123,6 +123,9 @@ public:
 #if QT_CONFIG(draganddrop)
     virtual QWaylandDrag *createPlatformDrag(QWaylandDisplay *waylandDisplay) const;
 #endif
+#if QT_CONFIG(accessibility)
+    virtual QPlatformAccessibility *createPlatformAccessibility() const;
+#endif
 
     virtual QWaylandClientBufferIntegration *clientBufferIntegration() const;
     virtual QWaylandServerBufferIntegration *serverBufferIntegration() const;
