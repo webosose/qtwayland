@@ -719,7 +719,7 @@ bool QWaylandInputDevice::Keyboard::loadKeyMap()
     close(mKeymapFd);
 
     if (!mXkbContext || !mXkbMap || !mXkbState) {
-        qWarning() << "Load default keymap()";
+        qInfo() << "Load default keymap()";
         if (!createDefaultKeyMap()) {
             qWarning() << "Load keymap failed, no key input";
             releaseKeyMap();
