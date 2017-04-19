@@ -420,8 +420,12 @@ void QWaylandDisplay::forceRoundTrip()
             ret = wl_display_dispatch(mDisplay);
     }
 
-    if (ret == -1 && !done)
+    if (ret == -1 && !done) {
         wl_callback_destroy(callback);
+
+        checkError();
+        exitWithError();
+    }
 }
 
 bool QWaylandDisplay::supportsWindowDecoration() const
