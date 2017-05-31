@@ -112,6 +112,7 @@ private:
     void initXKB();
     void createXKBKeymap();
     void createXKBState(xkb_keymap *keymap);
+    void releaseXKB();
 #endif
     static uint toWaylandXkbV1Key(const uint nativeScanCode);
 
@@ -131,13 +132,14 @@ private:
 
     bool pendingKeymap = false;
 #if QT_CONFIG(xkbcommon)
-    size_t keymap_size;
+    size_t keymap_size = 0;
     int keymap_fd = -1;
     char *keymap_area = nullptr;
     using ScanCodeKey = std::pair<uint,int>; // group/layout and QtKey
     QMap<ScanCodeKey, uint> scanCodesByQtKey;
     struct xkb_context *xkb_context = nullptr;
     struct xkb_state *xkb_state = nullptr;
+    bool m_keymap_shared = false;
 #endif
 
     quint32 repeatRate = 40;

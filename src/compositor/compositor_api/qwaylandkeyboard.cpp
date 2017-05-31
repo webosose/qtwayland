@@ -59,6 +59,185 @@
 
 QT_BEGIN_NAMESPACE
 
+#if QT_CONFIG(xkbcommon)
+class XKBKeymap
+{
+public:
+    XKBKeymap();
+    ~XKBKeymap();
+
+    struct Data {
+        xkb_context *context;
+        xkb_keymap *map;
+        int map_fd;
+        size_t map_size;
+        char *map_area;
+    };
+
+    static XKBKeymap *instance()
+    {
+        static XKBKeymap *s = NULL;
+        if (!s)
+            s = new XKBKeymap;
+        return s;
+    }
+
+    static XKBKeymap::Data* createXKBKeymap(const QWaylandKeymap *keymap);
+
+    const XKBKeymap::Data* defaultXKBKeymap() { return m_default_data; }
+
+private:
+    QWaylandKeymap *m_default_keymap = nullptr;
+    XKBKeymap::Data *m_default_data;
+};
+
+XKBKeymap::XKBKeymap()
+{
+    QString ruleNames = QString(qgetenv("QT_WAYLAND_XKB_RULE_NAMES"));
+
+    if (!ruleNames.isEmpty()) {
+        // rules:model:layout:variant:options
+        QStringList split = ruleNames.split(":");
+        if (split.length() == 5) {
+            qInfo() << "Using QT_WAYLAND_XKB_RULE_NAMES for default XKB keymap:" << ruleNames;
+            m_default_keymap = new QWaylandKeymap(split[2], QString(), QString(), split[1], split[0]);
+        } else {
+            qWarning("Error to parse QT_WAYLAND_XKB_RULE_NAMES. Default XKB keymap will be used.");
+            m_default_keymap = new QWaylandKeymap();
+        }
+    } else {
+        qWarning("No QT_WAYLAND_XKB_RULE_NAMES set. Default XKB keymap will be used.");
+        m_default_keymap = new QWaylandKeymap();
+    }
+
+    m_default_data = XKBKeymap::createXKBKeymap(m_default_keymap);
+}
+
+static int createAnonymousFile(size_t size)
+{
+#ifndef NO_WEBOS_PLATFORM
+    // See must be reverted in BHV-1362
+    QString path = QString(qgetenv("XDG_RUNTIME_DIR"));
+#else
+    QString path = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+#endif
+    if (path.isEmpty())
+        return -1;
+
+    QByteArray name = QFile::encodeName(path + QStringLiteral("/qtwayland-XXXXXX"));
+
+    int fd = mkstemp(name.data());
+    if (fd < 0)
+        return -1;
+
+    long flags = fcntl(fd, F_GETFD);
+    if (flags == -1 || fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
+        close(fd);
+        fd = -1;
+    }
+    unlink(name.constData());
+
+    if (fd < 0)
+        return -1;
+
+    if (ftruncate(fd, size) < 0) {
+        close(fd);
+        return -1;
+    }
+
+    return fd;
+}
+
+XKBKeymap::Data* XKBKeymap::createXKBKeymap(const QWaylandKeymap *keymap)
+{
+    xkb_context *context = xkb_context_new(static_cast<xkb_context_flags>(0));
+    if (!context) {
+        qWarning("Failed to create XKB context");
+        return NULL;
+    }
+
+    xkb_keymap *map = NULL;
+    int map_fd = -1;
+    size_t map_size = 0;
+    char *map_area = NULL;
+    struct xkb_rule_names rule_names = { strdup(qPrintable(keymap->rules())),
+                                         strdup(qPrintable(keymap->model())),
+                                         strdup(qPrintable(keymap->layout())),
+                                         strdup(qPrintable(keymap->variant())),
+                                         strdup(qPrintable(keymap->options())) };
+
+    map = xkb_keymap_new_from_names(context, &rule_names, static_cast<xkb_keymap_compile_flags>(0));
+    if (map) {
+        char *str = xkb_keymap_get_as_string(map, XKB_KEYMAP_FORMAT_TEXT_V1);
+        if (str) {
+            map_size = strlen(str) + 1;
+            map_fd = createAnonymousFile(map_size);
+            if (map_fd >= 0) {
+                map_area = static_cast<char *>(mmap(0, map_size, PROT_READ | PROT_WRITE, MAP_SHARED, map_fd, 0));
+                if (map_area != MAP_FAILED)
+                    strcpy(map_area, str);
+            }
+        }
+    }
+
+    free((char *)rule_names.rules);
+    free((char *)rule_names.model);
+    free((char *)rule_names.layout);
+    free((char *)rule_names.variant);
+    free((char *)rule_names.options);
+
+    if (map_area) {
+        XKBKeymap::Data *ret = new XKBKeymap::Data;
+        ret->context = context;
+        ret->map = map;
+        ret->map_fd = map_fd;
+        ret->map_size = map_size;
+        ret->map_area = map_area;
+
+        qDebug() << "Created XKB keymap:"
+            << "fd:"        << map_fd
+            << "size:"      << map_size
+            << "layout:"    << keymap->layout()
+            << "variant:"   << keymap->variant()
+            << "options:"   << keymap->options()
+            << "model:"     << keymap->model()
+            << "rules:"     << keymap->rules();
+
+        return ret;
+    }
+
+    qWarning("Failed to create XKB keymap");
+
+    if (map_fd >= 0)
+        close(map_fd);
+    if (map)
+        xkb_keymap_unref(map);
+    if (context)
+        xkb_context_unref(context);
+
+    return NULL;
+}
+
+XKBKeymap::~XKBKeymap()
+{
+    if (m_default_data) {
+        if (m_default_data->map_area)
+            munmap(m_default_data->map_area, m_default_data->map_size);
+        if (m_default_data->map_fd >= 0)
+            close(m_default_data->map_fd);
+        if (m_default_data->map)
+            xkb_keymap_unref(m_default_data->map);
+        if (m_default_data->context)
+            xkb_context_unref(m_default_data->context);
+
+        delete m_default_data;
+    }
+    if (m_default_keymap)
+        delete m_default_keymap;
+}
+#endif
+
+
 QWaylandKeyboardPrivate::QWaylandKeyboardPrivate(QWaylandSeat *seat)
     : seat(seat)
 {
@@ -67,13 +246,7 @@ QWaylandKeyboardPrivate::QWaylandKeyboardPrivate(QWaylandSeat *seat)
 QWaylandKeyboardPrivate::~QWaylandKeyboardPrivate()
 {
 #if QT_CONFIG(xkbcommon)
-    if (xkb_context) {
-        if (keymap_area)
-            munmap(keymap_area, keymap_size);
-        close(keymap_fd);
-        xkb_context_unref(xkb_context);
-        xkb_state_unref(xkb_state);
-    }
+    releaseXKB();
 #endif
 }
 
@@ -303,15 +476,29 @@ void QWaylandKeyboardPrivate::maybeUpdateKeymap()
 {
     // There must be no keys pressed when changing the keymap,
     // see http://lists.freedesktop.org/archives/wayland-devel/2013-October/011395.html
-    if (!pendingKeymap || !keys.isEmpty())
+    if (!pendingKeymap || !keys.isEmpty() || !seat || !seat->keymap())
         return;
 
     pendingKeymap = false;
 #if QT_CONFIG(xkbcommon)
-    if (!xkb_context)
-        return;
+    // Release old keymap
+    releaseXKB();
 
-    createXKBKeymap();
+    XKBKeymap::Data *data = XKBKeymap::instance()->createXKBKeymap(seat->keymap());
+    if (data) {
+        xkb_context = data->context;
+        keymap_fd = data->map_fd;
+        keymap_size = data->map_size;
+        keymap_area = data->map_area;
+        xkb_state = xkb_state_new(data->map);
+        m_keymap_shared = false;
+        qInfo() << "New XKB keymap has been created," << this << "fd:" << keymap_fd << "size:" << keymap_size;
+        delete data;
+    } else {
+        qWarning() << "Unable to update XKB keymap," << this;
+        return;
+    }
+
     foreach (Resource *res, resourceMap()) {
         send_keymap(res->handle, WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1, keymap_fd, keymap_size);
     }
@@ -328,50 +515,19 @@ void QWaylandKeyboardPrivate::maybeUpdateKeymap()
 }
 
 #if QT_CONFIG(xkbcommon)
-static int createAnonymousFile(size_t size)
-{
-#ifndef NO_WEBOS_PLATFORM
-    // See must be reverted in BHV-1362
-    QString path = QString(qgetenv("XDG_RUNTIME_DIR"));
-#else
-    QString path = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
-#endif
-    if (path.isEmpty())
-        return -1;
-
-    QByteArray name = QFile::encodeName(path + QStringLiteral("/qtwayland-XXXXXX"));
-
-    int fd = mkstemp(name.data());
-    if (fd < 0)
-        return -1;
-
-    long flags = fcntl(fd, F_GETFD);
-    if (flags == -1 || fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
-        close(fd);
-        fd = -1;
-    }
-    unlink(name.constData());
-
-    if (fd < 0)
-        return -1;
-
-    if (ftruncate(fd, size) < 0) {
-        close(fd);
-        return -1;
-    }
-
-    return fd;
-}
-
 void QWaylandKeyboardPrivate::initXKB()
 {
-    xkb_context = xkb_context_new(static_cast<xkb_context_flags>(0));
-    if (!xkb_context) {
-        qWarning("Failed to create a XKB context: keymap will not be supported");
-        return;
-    }
+    const XKBKeymap::Data *data = XKBKeymap::instance()->defaultXKBKeymap();
 
-    createXKBKeymap();
+    if (data) {
+        xkb_context = data->context;
+        keymap_fd = data->map_fd;
+        keymap_size = data->map_size;
+        keymap_area = data->map_area;
+        xkb_state = xkb_state_new(data->map);
+        m_keymap_shared = true;
+        qInfo() << "Using default XKB keymap," << this << "fd:" << keymap_fd << "size:" << keymap_size;
+    }
 }
 
 
@@ -441,6 +597,19 @@ void QWaylandKeyboardPrivate::createXKBKeymap()
     free((char *)rule_names.layout);
     free((char *)rule_names.variant);
     free((char *)rule_names.options);
+}
+
+void QWaylandKeyboardPrivate::releaseXKB()
+{
+    if (!m_keymap_shared) {
+        // This map was created only for this device
+        if (keymap_area)
+            munmap(keymap_area, keymap_size);
+        if (keymap_fd >= 0)
+            close(keymap_fd);
+    }
+    if (xkb_state)
+        xkb_state_unref(xkb_state);
 }
 #endif
 
