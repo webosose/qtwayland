@@ -44,7 +44,11 @@
 #include <QtWaylandClient/private/qwaylandscreen_p.h>
 #include "qwaylandglcontext.h"
 
-#include <QtPlatformSupport/private/qeglconvenience_p.h>
+#if (QT_VERSION < QT_VERSION_CHECK(5, 8, 0))
+    #include <QtPlatformSupport/private/qeglconvenience_p.h>
+#else
+    #include <QtEglSupport/private/qeglconvenience_p.h>
+#endif
 
 #include <QDebug>
 #include <QtGui/QWindow>

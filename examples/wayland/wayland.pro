@@ -1,7 +1,8 @@
 TEMPLATE=subdirs
 
 #Only build compositor examples if we are building
-#the QtCompositor API
+#the QtCompositor API and examples
+contains(CONFIG, examples) {
 contains(CONFIG, wayland-compositor) {
     SUBDIRS += qwindow-compositor
 
@@ -10,4 +11,5 @@ contains(CONFIG, wayland-compositor) {
     }
 
     SUBDIRS += server-buffer
+}
 }

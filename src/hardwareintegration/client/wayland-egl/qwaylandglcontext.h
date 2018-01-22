@@ -43,10 +43,9 @@
 #define QWAYLANDGLCONTEXT_H
 
 #include <QtWaylandClient/private/qwaylanddisplay_p.h>
-
 #include <qpa/qplatformopenglcontext.h>
-
 #include "qwaylandeglinclude.h"
+#include <QtGlobal>
 
 QT_BEGIN_NAMESPACE
 
@@ -72,8 +71,11 @@ public:
     bool isSharing() const;
     bool isValid() const;
 
-    void (*getProcAddress(const QByteArray &procName)) ();
-
+#if (QT_VERSION < QT_VERSION_CHECK(5, 7, 0))
+    QFunctionPointer getProcAddress(const QByteArray &procName);
+#else
+    QFunctionPointer getProcAddress(const char *procName);
+#endif
     QSurfaceFormat format() const { return m_format; }
 
     EGLConfig eglConfig() const;

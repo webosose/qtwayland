@@ -1,6 +1,18 @@
 TARGET = QtWaylandClient
+
 QT += core-private gui-private
-QT_FOR_PRIVATE += platformsupport-private
+
+equals(QT_MAJOR_VERSION,5) {
+    lessThan(QT_MINOR_VERSION, 8) {
+        QT_FOR_PRIVATE += platformsupport-private
+    }
+    else {
+        QT += egl_support-private
+        QT += fontdatabase_support-private
+        QT += eventdispatcher_support-private
+        QT += theme_support-private
+    }
+}
 
 MODULE=waylandclient
 MODULE_PLUGIN_TYPES = wayland-graphics-integration-client wayland-decoration-client wayland-inputdevice-integration

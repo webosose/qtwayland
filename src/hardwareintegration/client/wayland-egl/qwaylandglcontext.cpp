@@ -46,11 +46,19 @@
 #include <QtWaylandClient/private/qwaylandabstractdecoration_p.h>
 #include <QtWaylandClient/private/qwaylandintegration_p.h>
 #include "qwaylandeglwindow.h"
-
 #include "qtwaylandclienttracer.h"
-
 #include <QDebug>
+
+#if (QT_VERSION < QT_VERSION_CHECK(5, 8, 0))
 #include <QtPlatformSupport/private/qeglconvenience_p.h>
+#else
+#include <QtEglSupport/private/qeglconvenience_p.h>
+#endif
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 7, 0))
+#include <dlfcn.h>
+#endif
+
 #include <QtGui/private/qopenglcontext_p.h>
 #include <QtGui/private/qopengltexturecache_p.h>
 #include <QtGui/private/qguiapplication_p.h>
@@ -540,10 +548,20 @@ bool QWaylandGLContext::isValid() const
     return m_context != EGL_NO_CONTEXT;
 }
 
-void (*QWaylandGLContext::getProcAddress(const QByteArray &procName)) ()
+#if (QT_VERSION < QT_VERSION_CHECK(5, 7, 0))
+QFunctionPointer QWaylandGLContext::getProcAddress(const QByteArray &procName)
 {
     return eglGetProcAddress(procName.constData());
 }
+#else
+QFunctionPointer QWaylandGLContext::getProcAddress(const char *procName)
+{
+    QFunctionPointer proc = (QFunctionPointer) eglGetProcAddress(procName);
+    if (!proc)
+        proc = (QFunctionPointer) dlsym(RTLD_DEFAULT, procName);
+    return proc;
+}
+#endif
 
 EGLConfig QWaylandGLContext::eglConfig() const
 {
