@@ -31,6 +31,7 @@
 **
 ****************************************************************************/
 
+#include <QGuiApplication>
 #include "qwaylandtouch_p.h"
 #include "qwaylandinputdevice_p.h"
 #include "qwaylanddisplay_p.h"
@@ -85,9 +86,13 @@ void QWaylandTouchExtension::touch_extension_touch(uint32_t time,
         win = mInputDevice->keyboardFocus();
     if (!win || !win->window()) {
         qWarning("qt_touch_extension: handle_touch: No pointer focus");
-        return;
+        if (!(mTargetWindow = qGuiApp->focusWindow())) {
+            qWarning("qt_touch_extension: handle_touch: No focused window");
+            return;
+        }
+    } else {
+        mTargetWindow = win->window();
     }
-    mTargetWindow = win->window();
 
     QWindowSystemInterface::TouchPoint tp;
     tp.id = id;
