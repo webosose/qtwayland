@@ -142,7 +142,11 @@ QWaylandWindow::QWaylandWindow(QWindow *window)
     setWindowFlags(window->flags());
     setGeometry_helper(window->geometry());
     setMask(window->mask());
+#ifdef NO_WEBOS_PLATFORM
+    // Disable this line in webOS since we have our own window state
+    // logic in a descendant class and want it to be used always.
     setWindowStateInternal(window->windowState());
+#endif
     handleContentOrientationChange(window->contentOrientation());
 }
 
