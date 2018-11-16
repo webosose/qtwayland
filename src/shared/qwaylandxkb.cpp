@@ -269,7 +269,7 @@ static const uint32_t KeyTbl[] = {
     0,                          0
 };
 
-static int lookupKeysym(xkb_keysym_t key)
+int QWaylandXkb::lookupKeysym(xkb_keysym_t key)
 {
     int code = 0;
     int i = 0;

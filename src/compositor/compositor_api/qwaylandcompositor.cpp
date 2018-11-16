@@ -102,6 +102,8 @@ Q_LOGGING_CATEGORY(qLcWaylandCompositorInputMethods, "qt.waylandcompositor.input
 
 namespace QtWayland {
 
+#ifdef NO_WEBOS_PLATFORM
+
 class WindowSystemEventHandler : public QWindowSystemEventHandler
 {
 public:
@@ -155,6 +157,7 @@ public:
 
     QWaylandCompositor *compositor = nullptr;
 };
+#endif
 
 } // namespace
 
@@ -164,10 +167,15 @@ QWaylandCompositorPrivate::QWaylandCompositorPrivate(QWaylandCompositor *composi
         display = static_cast<wl_display*>(QGuiApplication::platformNativeInterface()->nativeResourceForIntegration("server_wl_display"));
     if (!display)
         display = wl_display_create();
+
+#ifdef NO_WEBOS_PLATFORM
     eventHandler.reset(new QtWayland::WindowSystemEventHandler(compositor));
+#endif
     timer.start();
 
+#ifdef NO_WEBOS_PLATFORM
     QWindowSystemInterfacePrivate::installWindowSystemEventHandler(eventHandler.data());
+#endif
 }
 
 void QWaylandCompositorPrivate::init()

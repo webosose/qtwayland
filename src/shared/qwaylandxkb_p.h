@@ -61,6 +61,7 @@ class QKeyEvent;
 class QWaylandXkb
 {
 public:
+    static int lookupKeysym(xkb_keysym_t key);
     static std::pair<int, QString> keysymToQtKey(xkb_keysym_t keysym, Qt::KeyboardModifiers &modifiers);
     static Qt::KeyboardModifiers modifiers(struct xkb_state *state);
 

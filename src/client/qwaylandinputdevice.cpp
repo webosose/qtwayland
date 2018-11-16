@@ -281,6 +281,16 @@ void QWaylandInputDevice::Keyboard::releaseComposeState()
     mXkbComposeTable = nullptr;
 }
 
+int QWaylandInputDevice::Keyboard::keysymToQtKey(xkb_keysym_t key)
+{
+    return QWaylandXkb::lookupKeysym(key);
+}
+
+std::pair<int, QString> QWaylandInputDevice::Keyboard::keysymToQtKey(xkb_keysym_t keysym, Qt::KeyboardModifiers &modifiers)
+{
+    return QWaylandXkb::keysymToQtKey(keysym, modifiers);
+}
+
 #endif
 
 QWaylandInputDevice::Keyboard::~Keyboard()
@@ -953,7 +963,11 @@ void QWaylandInputDevice::Keyboard::keyboard_key(uint32_t serial, uint32_t time,
 
     Qt::KeyboardModifiers modifiers = mParent->modifiers();
 
-    std::tie(qtkey, text) = QWaylandXkb::keysymToQtKey(sym, modifiers);
+    uint utf32 = xkb_keysym_to_utf32(sym);
+    if (utf32)
+        text = QString::fromUcs4(&utf32, 1);
+
+    std::tie(qtkey, text) = keysymToQtKey(sym, modifiers);
 
     if (!composedText.isNull())
         text = composedText;

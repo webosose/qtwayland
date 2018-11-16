@@ -15,10 +15,11 @@ use_gold_linker: CONFIG += no_linker_version_script
 CONFIG -= precompile_header
 CONFIG += link_pkgconfig wayland-scanner
 
-qtConfig(xkbcommon): \
+qtConfig(xkbcommon) {
     QMAKE_USE_PRIVATE += xkbcommon
-
-QMAKE_USE += wayland-client
+} else {
+    DEFINES += QT_NO_WAYLAND_XKB
+}
 
 INCLUDEPATH += $$PWD/../shared
 

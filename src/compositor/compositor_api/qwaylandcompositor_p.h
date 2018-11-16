@@ -161,8 +161,9 @@ protected:
     QScopedPointer<QtWayland::ServerBufferIntegration> server_buffer_integration;
 #endif
 
+#ifdef NO_WEBOS_PLATFORM
     QScopedPointer<QWindowSystemEventHandler> eventHandler;
-
+#endif
     bool retainSelection = false;
     bool preInitialized = false;
     bool initialized = false;

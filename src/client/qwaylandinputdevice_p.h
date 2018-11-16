@@ -140,6 +140,14 @@ public:
     virtual Pointer *createPointer(QWaylandInputDevice *device);
     virtual Touch *createTouch(QWaylandInputDevice *device);
 
+protected:
+    Touch *mTouch = nullptr;
+    QTouchDevice *mTouchDevice = nullptr;
+    uint32_t mTime = 0;
+    uint32_t mSerial = 0;
+
+    void seat_capabilities(uint32_t caps) Q_DECL_OVERRIDE;
+
 private:
     void setCursor(Qt::CursorShape cursor, QWaylandScreen *screen);
 
@@ -157,17 +165,10 @@ private:
 
     Keyboard *mKeyboard = nullptr;
     Pointer *mPointer = nullptr;
-    Touch *mTouch = nullptr;
 
     QWaylandTextInput *mTextInput = nullptr;
 
-    uint32_t mTime = 0;
-    uint32_t mSerial = 0;
-
-    void seat_capabilities(uint32_t caps) override;
     void handleTouchPoint(int id, double x, double y, Qt::TouchPointState state);
-
-    QTouchDevice *mTouchDevice = nullptr;
 
     QSharedPointer<QWaylandBuffer> mPixmapCursor;
 
@@ -232,6 +233,10 @@ public:
     QTimer mRepeatTimer;
 
     Qt::KeyboardModifiers modifiers() const;
+#if QT_CONFIG(xkbcommon)
+    int keysymToQtKey(xkb_keysym_t key);
+    virtual std::pair<int, QString> keysymToQtKey(xkb_keysym_t keysym, Qt::KeyboardModifiers &modifiers);
+#endif
 
 private slots:
     void repeatKey();

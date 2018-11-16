@@ -94,7 +94,7 @@ public:
 
     void keyEvent(uint code, uint32_t state);
     void sendKeyEvent(uint code, uint32_t state, bool repeat);
-    void updateModifierState(uint code, uint32_t state, bool repeat);
+    void updateModifierState(uint code, uint32_t state, bool repeat = false);
     void updateModifierState(QWaylandKeyboard *refKeyboard);
 
     void maybeUpdateKeymap();
