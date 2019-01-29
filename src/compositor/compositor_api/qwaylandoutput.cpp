@@ -119,7 +119,10 @@ void QWaylandOutputPrivate::output_bind_resource(Resource *resource)
         sendMode(resource, mode);
 
     if (resource->version() >= 2) {
+#ifdef NO_WEBOS_PLATFORM
+        //TODO: Not supported in webos-ozone
         send_scale(resource->handle, scaleFactor);
+#endif
         send_done(resource->handle);
     }
 }
@@ -832,7 +835,10 @@ void QWaylandOutput::setScaleFactor(int scale)
 
     Q_FOREACH (QWaylandOutputPrivate::Resource *resource, d->resourceMap().values()) {
         if (resource->version() >= 2) {
+#ifdef NO_WEBOS_PLATFORM
+            //TODO: Not supported in webos-ozone
             d->send_scale(resource->handle, scale);
+#endif
             d->send_done(resource->handle);
         }
     }
