@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -69,7 +69,7 @@ class Q_COMPOSITOR_EXPORT QWaylandSurfaceItem : public QQuickItem, public QWayla
     Q_PROPERTY(bool resizeSurfaceToItem READ resizeSurfaceToItem WRITE setResizeSurfaceToItem NOTIFY resizeSurfaceToItemChanged)
 
 public:
-    QWaylandSurfaceItem(QWaylandQuickSurface *surface, QQuickItem *parent = 0);
+    QWaylandSurfaceItem(QWaylandQuickSurface *surface, QQuickItem *parent = Q_NULLPTR);
     ~QWaylandSurfaceItem();
 
     Q_INVOKABLE bool isYInverted() const;
@@ -94,7 +94,6 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event);
     void hoverEnterEvent(QHoverEvent *event);
     void hoverMoveEvent(QHoverEvent *event);
-    void hoverLeaveEvent(QHoverEvent *event);
     void wheelEvent(QWheelEvent *event);
 
     void keyPressEvent(QKeyEvent *event);
@@ -103,11 +102,11 @@ protected:
     void touchEvent(QTouchEvent *event);
     virtual void mouseUngrabEvent();
 
-public slots:
-    virtual void takeFocus(QWaylandInputDevice *device = 0);
+public Q_SLOTS:
+    virtual void takeFocus(QWaylandInputDevice *device = Q_NULLPTR);
     void setPaintEnabled(bool paintEnabled);
 
-private slots:
+private Q_SLOTS:
     void surfaceMapped();
     void surfaceUnmapped();
     void parentChanged(QWaylandSurface *newParent, QWaylandSurface *oldParent);
@@ -126,7 +125,9 @@ protected:
 
 private:
     friend class QWaylandSurfaceNode;
+    friend class QWaylandQuickSurface;
     void init(QWaylandQuickSurface *);
+    void updateTexture(bool changed);
 
     static QMutex *mutex;
 

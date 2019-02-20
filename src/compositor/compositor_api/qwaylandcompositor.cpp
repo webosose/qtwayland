@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -40,7 +41,9 @@
 
 #include "qwaylandcompositor.h"
 
+#include "qwaylandclient.h"
 #include "qwaylandinput.h"
+#include "qwaylandoutput.h"
 #include "qwaylandglobalinterface.h"
 #include "qwaylandsurfaceview.h"
 
@@ -55,6 +58,7 @@
 #include <QtCore/QStringList>
 
 #include <QtGui/QDesktopServices>
+#include <QtGui/QScreen>
 
 #include <QGuiApplication>
 #include <QScreen>
@@ -63,17 +67,15 @@
 
 QT_BEGIN_NAMESPACE
 
-QWaylandCompositor::QWaylandCompositor(QWindow *window, const char *socketName, ExtensionFlags extensions)
+QWaylandCompositor::QWaylandCompositor(const char *socketName, ExtensionFlags extensions)
     : m_compositor(new QtWayland::Compositor(this, extensions))
-    , m_toplevel_window(window)
 {
     m_compositor->m_socket_name = socketName;
     m_compositor->init();
 }
 
-QWaylandCompositor::QWaylandCompositor(QWindow *window, const char *socketName, QtWayland::Compositor *dptr)
+QWaylandCompositor::QWaylandCompositor(const char *socketName, QtWayland::Compositor *dptr)
     : m_compositor(dptr)
-    , m_toplevel_window(window)
 {
     m_compositor->m_socket_name = socketName;
     m_compositor->init();
@@ -117,21 +119,19 @@ void QWaylandCompositor::destroyClientForSurface(QWaylandSurface *surface)
     destroyClient(surface->client());
 }
 
-void QWaylandCompositor::destroyClient(WaylandClient *client)
+void QWaylandCompositor::destroyClient(QWaylandClient *client)
 {
     m_compositor->destroyClient(client);
 }
 
-QList<QWaylandSurface *> QWaylandCompositor::surfacesForClient(WaylandClient* c) const
+QList<QWaylandSurface *> QWaylandCompositor::surfacesForClient(QWaylandClient* client) const
 {
-    wl_client *client = static_cast<wl_client *>(c);
-
     QList<QtWayland::Surface *> surfaces = m_compositor->surfaces();
 
     QList<QWaylandSurface *> result;
 
     for (int i = 0; i < surfaces.count(); ++i) {
-        if (surfaces.at(i)->resource()->client() == client) {
+        if (surfaces.at(i)->waylandSurface()->client() == client) {
             result.append(surfaces.at(i)->waylandSurface());
         }
     }
@@ -143,14 +143,30 @@ QList<QWaylandSurface *> QWaylandCompositor::surfaces() const
 {
     QList<QtWayland::Surface *> surfaces = m_compositor->surfaces();
     QList<QWaylandSurface *> surfs;
+    surfs.reserve(surfaces.count());
     foreach (QtWayland::Surface *s, surfaces)
         surfs << s->waylandSurface();
     return surfs;
 }
 
-QWindow * QWaylandCompositor::window() const
+QList<QWaylandOutput *> QWaylandCompositor::outputs() const
 {
-    return m_toplevel_window;
+    return m_compositor->outputs();
+}
+
+QWaylandOutput *QWaylandCompositor::output(QWindow *window)
+{
+    return m_compositor->output(window);
+}
+
+QWaylandOutput *QWaylandCompositor::primaryOutput() const
+{
+    return m_compositor->primaryOutput();
+}
+
+void QWaylandCompositor::setPrimaryOutput(QWaylandOutput *output)
+{
+    m_compositor->setPrimaryOutput(output);
 }
 
 void QWaylandCompositor::cleanupGraphicsResources()
@@ -160,11 +176,16 @@ void QWaylandCompositor::cleanupGraphicsResources()
 
 qreal QWaylandCompositor::devicePixelRatio() const
 {
+    // TODO: This is not correct if there are multiple windows in different
+    //       device pixel ratios. So this needs to be improved especially
+    //       for targets with multiple displays.
+
     qreal dpr;
+    QWaylandOutput *output = primaryOutput();
 
     // Try to use window() first. Otherwise fallback to primaryScreen()
-    if (window())
-        dpr = window()->devicePixelRatio();
+    if (output && output->window())
+        dpr = output->window()->devicePixelRatio();
     else
         dpr = QGuiApplication::primaryScreen()->devicePixelRatio();
 
@@ -182,13 +203,20 @@ void QWaylandCompositor::surfaceAboutToBeDestroyed(QWaylandSurface *surface)
 
 QWaylandSurfaceView *QWaylandCompositor::pickView(const QPointF &globalPosition) const
 {
-    Q_FOREACH (QtWayland::Surface *surface, m_compositor->surfaces()) {
-        foreach (QWaylandSurfaceView *view, surface->waylandSurface()->views())
-            if (QRectF(view->pos(), surface->size()).contains(globalPosition))
-                return view;
+    Q_FOREACH (QWaylandOutput *output, outputs()) {
+        // Skip coordinates not in output
+        if (!QRectF(output->geometry()).contains(globalPosition))
+            continue;
+
+        Q_FOREACH (QWaylandSurface *surface, output->surfaces()) {
+            Q_FOREACH (QWaylandSurfaceView *view, surface->views()) {
+                if (QRectF(view->pos(), surface->size()).contains(globalPosition))
+                    return view;
+            }
+        }
     }
 
-    return 0;
+    return Q_NULLPTR;
 }
 
 QPointF QWaylandCompositor::mapToView(QWaylandSurfaceView *surface, const QPointF &globalPosition) const
@@ -201,7 +229,7 @@ QPointF QWaylandCompositor::mapToView(QWaylandSurfaceView *surface, const QPoint
 
     The default implementation simply forwards the request to QDesktopServices::openUrl().
 */
-bool QWaylandCompositor::openUrl(WaylandClient *client, const QUrl &url)
+bool QWaylandCompositor::openUrl(QWaylandClient *client, const QUrl &url)
 {
     Q_UNUSED(client);
     return QDesktopServices::openUrl(url);
@@ -243,33 +271,104 @@ const char *QWaylandCompositor::socketName() const
     return m_compositor->m_socket_name.constData();
 }
 
+#if QT_DEPRECATED_SINCE(5, 5)
 /*!
   Set the screen orientation based on accelerometer data or similar.
 */
 void QWaylandCompositor::setScreenOrientation(Qt::ScreenOrientation orientation)
 {
-    m_compositor->setScreenOrientation(orientation);
+    setScreenOrientation(primaryOutput(), orientation);
+}
+
+void QWaylandCompositor::setScreenOrientation(QWaylandOutput *output, Qt::ScreenOrientation orientation)
+{
+    if (output) {
+    /* FIXME: PLAT-34289
+     * WebOS screen geometry can be chaged according to Screen.orientation in runtime.
+     * So if we use primaryOrientation(), WL_OUTPUT_TRANSFORM value is inconsistent.
+     * That is,
+     * 0 degree rotation is reported as WL_OUTPUT_TRANSFORM_270
+     * 90 degree rotation is reported as WL_OUTPUT_TRANSFORM_270
+     * 180 degree rotation is reported as WL_OUTPUT_TRANSFORM_90
+     * 270 degree rotation is reported as WL_OUTPUT_TRANSFORM_90.
+     *
+     * So we use contant value using nativeOrientation().
+     * We'll redesign this so that screen geomoetry is not chaged in PLAT-34289.
+     * */
+#ifdef NO_WEBOS_PLATFORM
+        bool isPortrait = output->window()->screen()->primaryOrientation() == Qt::PortraitOrientation;
+
+        switch (orientation) {
+        case Qt::PrimaryOrientation:
+            output->setTransform(QWaylandOutput::TransformNormal);
+            break;
+        case Qt::LandscapeOrientation:
+            output->setTransform(isPortrait ? QWaylandOutput::Transform270 : QWaylandOutput::TransformNormal);
+            break;
+        case Qt::PortraitOrientation:
+            output->setTransform(isPortrait ? QWaylandOutput::TransformNormal : QWaylandOutput::Transform90);
+            break;
+        case Qt::InvertedLandscapeOrientation:
+            output->setTransform(isPortrait ? QWaylandOutput::Transform90 : QWaylandOutput::Transform180);
+            break;
+        case Qt::InvertedPortraitOrientation:
+            output->setTransform(isPortrait ? QWaylandOutput::Transform180 : QWaylandOutput::Transform270);
+            break;
+        }
+#else
+        bool isPortrait = output->window()->screen()->nativeOrientation() == Qt::PortraitOrientation;
+
+        switch (orientation) {
+        case Qt::PrimaryOrientation:
+            output->setTransform(QWaylandOutput::TransformNormal);
+            break;
+        case Qt::LandscapeOrientation:
+            output->setTransform(isPortrait ? QWaylandOutput::Transform270 : QWaylandOutput::TransformNormal);
+            break;
+        case Qt::PortraitOrientation:
+            output->setTransform(isPortrait ? QWaylandOutput::TransformNormal : QWaylandOutput::Transform270);
+            break;
+        case Qt::InvertedLandscapeOrientation:
+            output->setTransform(isPortrait ? QWaylandOutput::Transform90 : QWaylandOutput::Transform180);
+            break;
+        case Qt::InvertedPortraitOrientation:
+            output->setTransform(isPortrait ? QWaylandOutput::Transform180 : QWaylandOutput::Transform90);
+            break;
+        }
+#endif
+    }
 }
 
 void QWaylandCompositor::setOutputGeometry(const QRect &geometry)
 {
-    m_compositor->setOutputGeometry(geometry);
+    QWaylandOutput *output = primaryOutput();
+    if (output)
+        output->setGeometry(geometry);
 }
 
 QRect QWaylandCompositor::outputGeometry() const
 {
-    return m_compositor->outputGeometry();
+    QWaylandOutput *output = primaryOutput();
+    if (output)
+        return output->geometry();
+    return QRect();
 }
 
 void QWaylandCompositor::setOutputRefreshRate(int rate)
 {
-    m_compositor->setOutputRefreshRate(rate);
+    QWaylandOutput *output = primaryOutput();
+    if (output)
+        output->setMode({output->mode().size, rate});
 }
 
 int QWaylandCompositor::outputRefreshRate() const
 {
-    return m_compositor->outputRefreshRate();
+    QWaylandOutput *output = primaryOutput();
+    if (output)
+        return output->mode().refreshRate;
+    return 0;
 }
+#endif
 
 QWaylandInputDevice *QWaylandCompositor::defaultInputDevice() const
 {
@@ -302,7 +401,7 @@ void QWaylandCompositor::sendDragEndEvent()
     m_compositor->sendDragEndEvent();
 }
 
-void QWaylandCompositor::setCursorSurface(QWaylandSurface *surface, int hotspotX, int hotspotY, WaylandClient *client)
+void QWaylandCompositor::setCursorSurface(QWaylandSurface *surface, int hotspotX, int hotspotY, wl_client *client)
 {
     Q_UNUSED(surface);
     Q_UNUSED(hotspotX);
@@ -323,6 +422,13 @@ QWaylandSurfaceView *QWaylandCompositor::createView(QWaylandSurface *surface)
 QWaylandInputDevice *QWaylandCompositor::inputDeviceFor(QInputEvent *inputEvent)
 {
     return m_compositor->inputDeviceFor(inputEvent);
+}
+
+QWaylandOutput *QWaylandCompositor::createOutput(QWindow *window,
+                                                 const QString &manufacturer,
+                                                 const QString &model)
+{
+    return new QWaylandOutput(this, window, manufacturer, model);
 }
 
 QT_END_NAMESPACE

@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2014-2015 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,6 +42,17 @@
 #ifndef WL_COMPOSITOR_H
 #define WL_COMPOSITOR_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <QtCompositor/qwaylandexport.h>
 #include <QtCompositor/qwaylandcompositor.h>
 
@@ -48,7 +60,6 @@
 
 #include <QtCore/QElapsedTimer>
 #include <QtCore/QSet>
-#include <QtGui/QWindow>
 
 #include <private/qwldisplay_p.h>
 
@@ -56,6 +67,8 @@
 
 QT_BEGIN_NAMESPACE
 
+class QWaylandClient;
+class QWaylandClientPrivate;
 class QInputEvent;
 
 class QWaylandCompositor;
@@ -64,6 +77,7 @@ class WindowManagerServerIntegration;
 class QMimeData;
 class QPlatformScreenBuffer;
 class QWaylandSurface;
+class QWindowSystemEventHandler;
 
 namespace QtWayland {
 
@@ -72,7 +86,6 @@ class SurfaceBuffer;
 class InputDevice;
 class DataDeviceManager;
 class OutputGlobal;
-class OutputExtensionGlobal;
 class SurfaceExtensionGlobal;
 class SubSurfaceExtensionGlobal;
 class TouchExtensionGlobal;
@@ -93,7 +106,6 @@ public:
 
     void init();
     void sendFrameCallbacks(QList<QWaylandSurface *> visibleSurfaces);
-    void frameFinished(Surface *surface = 0);
 
     InputDevice *defaultInputDevice();
 
@@ -104,11 +116,18 @@ public:
 
     void destroySurface(Surface *surface);
 
-    void destroyClient(WaylandClient *client);
+    void destroyClient(QWaylandClient *client);
 
     uint currentTimeMsecs() const;
 
-    QWindow *window() const;
+    QList<QWaylandOutput *> outputs() const;
+    QWaylandOutput *output(QWindow *window) const;
+
+    void addOutput(QWaylandOutput *output);
+    void removeOutput(QWaylandOutput *output);
+
+    QWaylandOutput *primaryOutput() const;
+    void setPrimaryOutput(QWaylandOutput *output);
 
     ClientBufferIntegration *clientBufferIntegration() const;
     ServerBufferIntegration *serverBufferIntegration() const;
@@ -117,8 +136,8 @@ public:
     void initializeDefaultInputDevice();
     void initializeWindowManagerProtocol();
 
-    QList<Surface*> surfaces() const { return m_surfaces; }
-    QList<Surface*> surfacesForClient(wl_client* client);
+    QList<Surface *> surfaces() const { return m_surfaces; }
+
     QWaylandCompositor *waylandCompositor() const { return m_qt_compositor; }
 
     struct wl_display *wl_display() const { return m_display->handle(); }
@@ -126,16 +145,9 @@ public:
 
     static Compositor *instance();
 
-    QList<struct wl_client *> clients() const;
+    QList<QWaylandClient *> clients() const;
 
     WindowManagerServerIntegration *windowManagerIntegration() const { return m_windowManagerIntegration; }
-
-    void setScreenOrientation(Qt::ScreenOrientation orientation);
-    Qt::ScreenOrientation screenOrientation() const;
-    void setOutputGeometry(const QRect &geometry);
-    QRect outputGeometry() const;
-    void setOutputRefreshRate(int rate);
-    int outputRefreshRate() const;
 
     void setClientFullScreenHint(bool value);
 
@@ -186,8 +198,7 @@ protected:
     QList<QWaylandInputDevice *> m_inputDevices;
 
     /* Output */
-    //make this a list of the available screens
-    OutputGlobal *m_output_global;
+    QList<QWaylandOutput *> m_outputs;
 
     DataDeviceManager *m_data_device_manager;
 
@@ -203,6 +214,7 @@ protected:
 
     QWaylandCompositor *m_qt_compositor;
     Qt::ScreenOrientation m_orientation;
+    QList<QWaylandClient *> m_clients;
 
 #ifdef QT_COMPOSITOR_WAYLAND_GL
     QScopedPointer<HardwareIntegration> m_hw_integration;
@@ -213,7 +225,6 @@ protected:
     //extensions
     WindowManagerServerIntegration *m_windowManagerIntegration;
 
-    OutputExtensionGlobal *m_outputExtension;
     SurfaceExtensionGlobal *m_surfaceExtension;
     SubSurfaceExtensionGlobal *m_subSurfaceExtension;
     TouchExtensionGlobal *m_touchExtension;
@@ -221,6 +232,9 @@ protected:
     QScopedPointer<TextInputManager> m_textInputManager;
     QScopedPointer<InputPanel> m_inputPanel;
     QList<QWaylandGlobalInterface *> m_globals;
+#ifdef NO_WEBOS_PLATFORM
+    QScopedPointer<QWindowSystemEventHandler> m_eventHandler;
+#endif
 
     static void bind_func(struct wl_client *client, void *data,
                           uint32_t version, uint32_t id);
@@ -228,6 +242,8 @@ protected:
     bool m_retainSelection;
 
     friend class QT_PREPEND_NAMESPACE(QWaylandCompositor);
+    friend class QT_PREPEND_NAMESPACE(QWaylandClient);
+    friend class QT_PREPEND_NAMESPACE(QWaylandClientPrivate);
 };
 
 }

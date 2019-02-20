@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -60,6 +60,7 @@ QWaylandSurfaceInterface::QWaylandSurfaceInterface(QWaylandSurface *surface)
 QWaylandSurfaceInterface::~QWaylandSurfaceInterface()
 {
     d->surface->removeInterface(this);
+    delete d;
 }
 
 QWaylandSurface *QWaylandSurfaceInterface::surface() const
@@ -96,6 +97,11 @@ QWaylandSurfaceOp::QWaylandSurfaceOp(int t)
     d->type = t;
 }
 
+QWaylandSurfaceOp::~QWaylandSurfaceOp()
+{
+    delete d;
+}
+
 int QWaylandSurfaceOp::type() const
 {
     return d->type;
@@ -104,7 +110,7 @@ int QWaylandSurfaceOp::type() const
 
 
 QWaylandSurfaceSetVisibilityOp::QWaylandSurfaceSetVisibilityOp(QWindow::Visibility visibility)
-                              : QWaylandSurfaceOp(Type::SetVisibility)
+                              : QWaylandSurfaceOp(QWaylandSurfaceOp::SetVisibility)
                               , m_visibility(visibility)
 {
 }
@@ -115,7 +121,7 @@ QWindow::Visibility QWaylandSurfaceSetVisibilityOp::visibility() const
 }
 
 QWaylandSurfaceResizeOp::QWaylandSurfaceResizeOp(const QSize &size)
-                       : QWaylandSurfaceOp(Type::Resize)
+                       : QWaylandSurfaceOp(QWaylandSurfaceOp::Resize)
                        , m_size(size)
 {
 }
@@ -126,7 +132,7 @@ QSize QWaylandSurfaceResizeOp::size() const
 }
 
 QWaylandSurfacePingOp::QWaylandSurfacePingOp(uint32_t serial)
-                     : QWaylandSurfaceOp(Type::Ping)
+                     : QWaylandSurfaceOp(QWaylandSurfaceOp::Ping)
                      , m_serial(serial)
 {
 }

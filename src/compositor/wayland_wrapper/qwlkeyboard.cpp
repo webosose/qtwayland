@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -18,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -364,6 +364,13 @@ void Keyboard::setKeymap(const QWaylandKeymap &keymap)
 {
     m_keymap = keymap;
     m_pendingKeymap = true;
+
+    // If there is no key currently pressed, update right away the keymap
+    // Otherwise, delay the update when keys are released
+    // see http://lists.freedesktop.org/archives/wayland-devel/2013-October/011395.html
+    if (m_keys.isEmpty()) {
+        updateKeymap();
+    }
 }
 
 void Keyboard::focusDestroyed(void *data)
@@ -434,6 +441,11 @@ void Keyboard::keyboard_destroy_resource(wl_keyboard::Resource *resource)
         m_focusResource = 0;
 }
 
+void Keyboard::keyboard_release(wl_keyboard::Resource *resource)
+{
+    wl_resource_destroy(resource->handle);
+}
+
 void Keyboard::key(uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
 {
     if (m_focusResource) {
@@ -441,17 +453,9 @@ void Keyboard::key(uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
     }
 }
 
-void Keyboard::sendKeyEvent(uint code, uint32_t state, bool repeat)
+void Keyboard::keyEvent(uint code, uint32_t state)
 {
-    // There must be no keys pressed when changing the keymap,
-    // see http://lists.freedesktop.org/archives/wayland-devel/2013-October/011395.html
-    if (m_pendingKeymap && m_keys.isEmpty())
-        updateKeymap();
-
-    uint32_t time = m_compositor->currentTimeMsecs();
-    uint32_t serial = wl_display_next_serial(m_compositor->wl_display());
     uint key = code - 8;
-    m_grab->key(serial, time, key, state);
     if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 #ifdef NO_WEBOS_PLATFORM
         // In webos, there is no scence to pass pressed keys when switching focus
@@ -465,6 +469,16 @@ void Keyboard::sendKeyEvent(uint code, uint32_t state, bool repeat)
             }
         }
     }
+}
+
+void Keyboard::sendKeyEvent(uint code, uint32_t state, bool repeat)
+{
+    uint32_t time = m_compositor->currentTimeMsecs();
+    uint32_t serial = wl_display_next_serial(m_compositor->wl_display());
+    uint key = code - 8;
+    m_grab->key(serial, time, key, state);
+
+    // Was replaced from end of (void Keyboard::keyEvent(uint code, uint32_t state))
     updateModifierState(code, state, repeat);
 }
 
@@ -532,6 +546,11 @@ void Keyboard::updateModifierState(Keyboard *refKeyboard)
 
 void Keyboard::updateKeymap()
 {
+    // There must be no keys pressed when changing the keymap,
+    // see http://lists.freedesktop.org/archives/wayland-devel/2013-October/011395.html
+    if (!m_pendingKeymap || !m_keys.isEmpty())
+        return;
+
     m_pendingKeymap = false;
 #ifndef QT_NO_WAYLAND_XKB
     // Release old keymap
@@ -576,6 +595,65 @@ void Keyboard::initXKB()
         m_keymap_shared = true;
         qInfo() << "Using default XKB keymap," << this << "fd:" << m_keymap_fd << "size:" << m_keymap_size;
     }
+}
+
+void Keyboard::createXKBState(xkb_keymap *keymap)
+{
+    char *keymap_str = xkb_keymap_get_as_string(keymap, XKB_KEYMAP_FORMAT_TEXT_V1);
+    if (!keymap_str) {
+        qWarning("Failed to compile global XKB keymap");
+        return;
+    }
+
+    m_keymap_size = strlen(keymap_str) + 1;
+    if (m_keymap_fd >= 0)
+        close(m_keymap_fd);
+    m_keymap_fd = createAnonymousFile(m_keymap_size);
+    if (m_keymap_fd < 0) {
+        qWarning("Failed to create anonymous file of size %lu", static_cast<unsigned long>(m_keymap_size));
+        return;
+    }
+
+    m_keymap_area = static_cast<char *>(mmap(0, m_keymap_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_keymap_fd, 0));
+    if (m_keymap_area == MAP_FAILED) {
+        close(m_keymap_fd);
+        m_keymap_fd = -1;
+        qWarning("Failed to map shared memory segment");
+        return;
+    }
+
+    strcpy(m_keymap_area, keymap_str);
+    free(keymap_str);
+
+    if (m_state)
+        xkb_state_unref(m_state);
+    m_state = xkb_state_new(keymap);
+}
+
+void Keyboard::createXKBKeymap()
+{
+    if (!m_context)
+        return;
+
+    struct xkb_rule_names rule_names = { strdup(qPrintable(m_keymap.rules())),
+                                         strdup(qPrintable(m_keymap.model())),
+                                         strdup(qPrintable(m_keymap.layout())),
+                                         strdup(qPrintable(m_keymap.variant())),
+                                         strdup(qPrintable(m_keymap.options())) };
+    struct xkb_keymap *keymap = xkb_keymap_new_from_names(m_context, &rule_names, static_cast<xkb_keymap_compile_flags>(0));
+
+    if (keymap) {
+        createXKBState(keymap);
+        xkb_keymap_unref(keymap);
+    } else {
+        qWarning("Failed to load the '%s' XKB keymap.", qPrintable(m_keymap.layout()));
+    }
+
+    free((char *)rule_names.rules);
+    free((char *)rule_names.model);
+    free((char *)rule_names.layout);
+    free((char *)rule_names.variant);
+    free((char *)rule_names.options);
 }
 
 void Keyboard::releaseXKB()

@@ -3,8 +3,13 @@ TARGET = client
 INCLUDEPATH += .
 
 QT += waylandclient-private
-CONFIG += link_pkgconfig
-PKGCONFIG += wayland-client
+
+!contains(QT_CONFIG, no-pkg-config) {
+    PKGCONFIG += wayland-client
+    CONFIG += link_pkgconfig
+} else {
+    LIBS += -lwayland-client
+}
 
 CONFIG += wayland-scanner
 WAYLANDCLIENTSOURCES += ../share-buffer.xml
@@ -15,3 +20,6 @@ SOURCES += \
 
 HEADERS += \
     serverbufferrenderer.h
+
+target.path = $$[QT_INSTALL_EXAMPLES]/wayland/server-buffer/client
+INSTALLS += target

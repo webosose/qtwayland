@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -50,6 +42,8 @@
 #include "qwaylandscreen_p.h"
 #include "qwaylandcursor_p.h"
 #include "qwaylanddisplay_p.h"
+#include "qwaylandshmbackingstore_p.h"
+#include "../shared/qwaylandxkb.h"
 
 #include <QtGui/private/qpixmap_raster_p.h>
 #include <qpa/qplatformwindow.h>
@@ -66,6 +60,8 @@
 #include <QtGui/QGuiApplication>
 
 QT_BEGIN_NAMESPACE
+
+namespace QtWaylandClient {
 
 #ifndef QT_NO_WAYLAND_XKB
 
@@ -242,7 +238,12 @@ QWaylandInputDevice::Keyboard::~Keyboard()
 #ifndef QT_NO_WAYLAND_XKB
     releaseKeyMap();
 #endif
-    wl_keyboard_destroy(object());
+    if (mFocus)
+        QWindowSystemInterface::handleWindowActivated(0);
+    if (mParent->mVersion >= 3)
+        wl_keyboard_release(object());
+    else
+        wl_keyboard_destroy(object());
 }
 
 void QWaylandInputDevice::Keyboard::stopRepeat()
@@ -261,7 +262,10 @@ QWaylandInputDevice::Pointer::Pointer(QWaylandInputDevice *p)
 
 QWaylandInputDevice::Pointer::~Pointer()
 {
-    wl_pointer_destroy(object());
+    if (mParent->mVersion >= 3)
+        wl_pointer_release(object());
+    else
+        wl_pointer_destroy(object());
 }
 
 QWaylandInputDevice::Touch::Touch(QWaylandInputDevice *p)
@@ -272,14 +276,18 @@ QWaylandInputDevice::Touch::Touch(QWaylandInputDevice *p)
 
 QWaylandInputDevice::Touch::~Touch()
 {
-    wl_touch_destroy(object());
+    if (mParent->mVersion >= 3)
+        wl_touch_release(object());
+    else
+        wl_touch_destroy(object());
 }
 
 QWaylandInputDevice::QWaylandInputDevice(QWaylandDisplay *display, int version, uint32_t id)
     : QObject()
-    , QtWayland::wl_seat(display->wl_registry(), id, qMin(version, 2))
+    , QtWayland::wl_seat(display->wl_registry(), id, qMin(version, 3))
     , mQDisplay(display)
     , mDisplay(display->wl_display())
+    , mVersion(qMin(version, 3))
     , mCaps(0)
     , mDataDevice(0)
     , mKeyboard(0)
@@ -289,10 +297,11 @@ QWaylandInputDevice::QWaylandInputDevice(QWaylandDisplay *display, int version, 
     , mSerial(0)
     , mTouchDevice(0)
 {
+#ifndef QT_NO_DRAGANDDROP
     if (mQDisplay->dndSelectionHandler()) {
         mDataDevice = mQDisplay->dndSelectionHandler()->getDataDevice(this);
     }
-
+#endif
 }
 
 QWaylandInputDevice::~QWaylandInputDevice()
@@ -371,6 +380,14 @@ void QWaylandInputDevice::handleWindowDestroyed(QWaylandWindow *window)
         mTouch->mFocus = 0;
 }
 
+void QWaylandInputDevice::handleEndDrag()
+{
+    if (mTouch)
+        mTouch->releasePoints();
+    if (mPointer)
+        mPointer->releaseButtons();
+}
+
 void QWaylandInputDevice::setDataDevice(QWaylandDataDevice *device)
 {
     PMTRACE_QTWLCLI_FUNCTION;
@@ -427,21 +444,20 @@ Qt::KeyboardModifiers QWaylandInputDevice::Keyboard::modifiers() const
     if (!mXkbState)
         return ret;
 
-    xkb_state_component cstate = static_cast<xkb_state_component>(XKB_STATE_DEPRESSED | XKB_STATE_LATCHED);
-
-    if (xkb_state_mod_name_is_active(mXkbState, "Shift", cstate))
-        ret |= Qt::ShiftModifier;
-    if (xkb_state_mod_name_is_active(mXkbState, "Control", cstate))
-        ret |= Qt::ControlModifier;
-    if (xkb_state_mod_name_is_active(mXkbState, "Alt", cstate))
-        ret |= Qt::AltModifier;
-    if (xkb_state_mod_name_is_active(mXkbState, "Mod1", cstate))
-        ret |= Qt::AltModifier;
-    if (xkb_state_mod_name_is_active(mXkbState, "Mod4", cstate))
-        ret |= Qt::MetaModifier;
+    ret = QWaylandXkb::modifiers(mXkbState);
 #endif
 
     return ret;
+}
+
+int QWaylandInputDevice::Keyboard::keysymToQtKey(xkb_keysym_t key)
+{
+    return QWaylandXkb::lookupKeysym(key);
+}
+
+int QWaylandInputDevice::Keyboard::keysymToQtKey(xkb_keysym_t keysym, Qt::KeyboardModifiers &modifiers, const QString &text)
+{
+    return QWaylandXkb::keysymToQtKey(keysym, modifiers, text);
 }
 
 uint32_t QWaylandInputDevice::cursorSerial() const
@@ -464,10 +480,27 @@ void QWaylandInputDevice::setCursor(Qt::CursorShape newShape, QWaylandScreen *sc
     setCursor(buffer, image);
 }
 
+void QWaylandInputDevice::setCursor(const QCursor &cursor, QWaylandScreen *screen)
+{
+    if (cursor.shape() == Qt::BitmapCursor) {
+        setCursor(screen->waylandCursor()->cursorBitmapImage(&cursor), cursor.hotSpot());
+        return;
+    }
+    setCursor(cursor.shape(), screen);
+}
+
 void QWaylandInputDevice::setCursor(struct wl_buffer *buffer, struct wl_cursor_image *image)
+{
+    setCursor(buffer,
+              image ? QPoint(image->hotspot_x, image->hotspot_y) : QPoint(),
+              image ? QSize(image->width, image->height) : QSize());
+}
+
+void QWaylandInputDevice::setCursor(struct wl_buffer *buffer, const QPoint &hotSpot, const QSize &size)
 {
     PMTRACE_QTWLCLI_FUNCTION;
     if (mCaps & WL_SEAT_CAPABILITY_POINTER) {
+        mPixmapCursor.clear();
         mPointer->mCursorSerial = mPointer->mEnterSerial;
         /* Hide cursor */
         if (!buffer)
@@ -477,20 +510,31 @@ void QWaylandInputDevice::setCursor(struct wl_buffer *buffer, struct wl_cursor_i
         }
 
         mPointer->set_cursor(mPointer->mEnterSerial, pointerSurface,
-                             image->hotspot_x, image->hotspot_y);
+                             hotSpot.x(), hotSpot.y());
         wl_surface_attach(pointerSurface, buffer, 0, 0);
-        wl_surface_damage(pointerSurface, 0, 0, image->width, image->height);
+        wl_surface_damage(pointerSurface, 0, 0, size.width(), size.height());
         wl_surface_commit(pointerSurface);
     }
 }
+
+void QWaylandInputDevice::setCursor(const QSharedPointer<QWaylandBuffer> &buffer, const QPoint &hotSpot)
+{
+    setCursor(buffer->buffer(), hotSpot, buffer->size());
+    mPixmapCursor = buffer;
+}
+
+class EnterEvent : public QWaylandPointerEvent
+{
+public:
+    EnterEvent(const QPointF &l, const QPointF &g)
+        : QWaylandPointerEvent(QWaylandPointerEvent::Enter, 0, l, g, 0, Qt::NoModifier)
+    {}
+};
 
 void QWaylandInputDevice::Pointer::pointer_enter(uint32_t serial, struct wl_surface *surface,
                                                  wl_fixed_t sx, wl_fixed_t sy)
 {
     PMTRACE_QTWLCLI_FUNCTION;
-    Q_UNUSED(sx);
-    Q_UNUSED(sy);
-
     if (!surface)
         return;
 
@@ -498,15 +542,16 @@ void QWaylandInputDevice::Pointer::pointer_enter(uint32_t serial, struct wl_surf
     window->window()->setCursor(window->window()->cursor());
 
     mFocus = window;
+    mSurfacePos = QPointF(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
+    mGlobalPos = window->window()->mapToGlobal(mSurfacePos.toPoint());
 
-    mParent->mTime = QWaylandDisplay::currentTimeMillisec();
     mParent->mSerial = serial;
     mEnterSerial = serial;
 
     QWaylandWindow *grab = QWaylandWindow::mouseGrab();
     if (!grab) {
-        window->handleMouseEnter(mParent);
-        window->handleMouse(mParent, mParent->mTime, mSurfacePos, mGlobalPos, mButtons, mParent->modifiers());
+        EnterEvent evt(mSurfacePos, mGlobalPos);
+        window->handleMouse(mParent, evt);
     }
 }
 
@@ -528,11 +573,18 @@ void QWaylandInputDevice::Pointer::pointer_leave(uint32_t time, struct wl_surfac
     mParent->mTime = time;
 }
 
+class MotionEvent : public QWaylandPointerEvent
+{
+public:
+    MotionEvent(ulong t, const QPointF &l, const QPointF &g, Qt::MouseButtons b, Qt::KeyboardModifiers m)
+        : QWaylandPointerEvent(QWaylandPointerEvent::Motion, t, l, g, b, m)
+    {
+    }
+};
+
 void QWaylandInputDevice::Pointer::pointer_motion(uint32_t time, wl_fixed_t surface_x, wl_fixed_t surface_y)
 {
     PMTRACE_QTWLCLI_FUNCTION;
-    Q_UNUSED(surface_x);
-    Q_UNUSED(surface_y);
 
     QWaylandWindow *window = mFocus;
 
@@ -557,9 +609,12 @@ void QWaylandInputDevice::Pointer::pointer_motion(uint32_t time, wl_fixed_t surf
         // so we just set it outside of the window boundaries.
         pos = QPointF(-1, -1);
         global = grab->window()->mapToGlobal(pos.toPoint());
-        grab->handleMouse(mParent, time, pos, global, mButtons, mParent->modifiers());
-    } else
-        window->handleMouse(mParent, time, mSurfacePos, mGlobalPos, mButtons, mParent->modifiers());
+        MotionEvent e(time, pos, global, mButtons, mParent->modifiers());
+        grab->handleMouse(mParent, e);
+    } else {
+        MotionEvent e(time, mSurfacePos, mGlobalPos, mButtons, mParent->modifiers());
+        window->handleMouse(mParent, e);
+    }
 }
 
 void QWaylandInputDevice::Pointer::pointer_button(uint32_t serial, uint32_t time,
@@ -605,10 +660,30 @@ void QWaylandInputDevice::Pointer::pointer_button(uint32_t serial, uint32_t time
     if (grab && grab != mFocus) {
         QPointF pos = QPointF(-1, -1);
         QPointF global = grab->window()->mapToGlobal(pos.toPoint());
-        grab->handleMouse(mParent, time, pos, global, mButtons, mParent->modifiers());
-    } else if (window)
-        window->handleMouse(mParent, time, mSurfacePos, mGlobalPos, mButtons, mParent->modifiers());
+        MotionEvent e(time, pos, global, mButtons, mParent->modifiers());
+        grab->handleMouse(mParent, e);
+    } else if (window) {
+        MotionEvent e(time, mSurfacePos, mGlobalPos, mButtons, mParent->modifiers());
+        window->handleMouse(mParent, e);
+    }
 }
+
+void QWaylandInputDevice::Pointer::releaseButtons()
+{
+    mButtons = Qt::NoButton;
+    MotionEvent e(mParent->mTime, mSurfacePos, mGlobalPos, mButtons, mParent->modifiers());
+    if (mFocus)
+        mFocus->handleMouse(mParent, e);
+}
+
+class WheelEvent : public QWaylandPointerEvent
+{
+public:
+    WheelEvent(ulong t, const QPointF &l, const QPointF &g, const QPoint &pd, const QPoint &ad)
+        : QWaylandPointerEvent(QWaylandPointerEvent::Wheel, t, l, g, pd, ad)
+    {
+    }
+};
 
 void QWaylandInputDevice::Pointer::pointer_axis(uint32_t time, uint32_t axis, int32_t value)
 {
@@ -634,133 +709,9 @@ void QWaylandInputDevice::Pointer::pointer_axis(uint32_t time, uint32_t axis, in
         angleDelta.setY(valueDelta);
     }
 
-    QWindowSystemInterface::handleWheelEvent(window->window(),
-                                             time, mSurfacePos,
-                                             mGlobalPos, pixelDelta,
-                                             angleDelta);
+    WheelEvent e(time, mSurfacePos, mGlobalPos, pixelDelta, angleDelta);
+    window->handleMouse(mParent, e);
 }
-
-#ifndef QT_NO_WAYLAND_XKB
-
-static const uint32_t KeyTbl[] = {
-    XKB_KEY_Escape,                  Qt::Key_Escape,
-    XKB_KEY_Tab,                     Qt::Key_Tab,
-    XKB_KEY_ISO_Left_Tab,            Qt::Key_Backtab,
-    XKB_KEY_BackSpace,               Qt::Key_Backspace,
-    XKB_KEY_Return,                  Qt::Key_Return,
-    XKB_KEY_Insert,                  Qt::Key_Insert,
-    XKB_KEY_Delete,                  Qt::Key_Delete,
-    XKB_KEY_Clear,                   Qt::Key_Delete,
-    XKB_KEY_Pause,                   Qt::Key_Pause,
-    XKB_KEY_Print,                   Qt::Key_Print,
-
-    XKB_KEY_Home,                    Qt::Key_Home,
-    XKB_KEY_End,                     Qt::Key_End,
-    XKB_KEY_Left,                    Qt::Key_Left,
-    XKB_KEY_Up,                      Qt::Key_Up,
-    XKB_KEY_Right,                   Qt::Key_Right,
-    XKB_KEY_Down,                    Qt::Key_Down,
-    XKB_KEY_Prior,                   Qt::Key_PageUp,
-    XKB_KEY_Next,                    Qt::Key_PageDown,
-
-    XKB_KEY_Shift_L,                 Qt::Key_Shift,
-    XKB_KEY_Shift_R,                 Qt::Key_Shift,
-    XKB_KEY_Shift_Lock,              Qt::Key_Shift,
-    XKB_KEY_Control_L,               Qt::Key_Control,
-    XKB_KEY_Control_R,               Qt::Key_Control,
-    XKB_KEY_Meta_L,                  Qt::Key_Meta,
-    XKB_KEY_Meta_R,                  Qt::Key_Meta,
-    XKB_KEY_Alt_L,                   Qt::Key_Alt,
-    XKB_KEY_Alt_R,                   Qt::Key_Alt,
-    XKB_KEY_Caps_Lock,               Qt::Key_CapsLock,
-    XKB_KEY_Num_Lock,                Qt::Key_NumLock,
-    XKB_KEY_Scroll_Lock,             Qt::Key_ScrollLock,
-    XKB_KEY_Super_L,                 Qt::Key_Super_L,
-    XKB_KEY_Super_R,                 Qt::Key_Super_R,
-    XKB_KEY_Menu,                    Qt::Key_Menu,
-    XKB_KEY_Hyper_L,                 Qt::Key_Hyper_L,
-    XKB_KEY_Hyper_R,                 Qt::Key_Hyper_R,
-    XKB_KEY_Help,                    Qt::Key_Help,
-
-    XKB_KEY_KP_Space,                Qt::Key_Space,
-    XKB_KEY_KP_Tab,                  Qt::Key_Tab,
-    XKB_KEY_KP_Enter,                Qt::Key_Enter,
-    XKB_KEY_KP_Home,                 Qt::Key_Home,
-    XKB_KEY_KP_Left,                 Qt::Key_Left,
-    XKB_KEY_KP_Up,                   Qt::Key_Up,
-    XKB_KEY_KP_Right,                Qt::Key_Right,
-    XKB_KEY_KP_Down,                 Qt::Key_Down,
-    XKB_KEY_KP_Prior,                Qt::Key_PageUp,
-    XKB_KEY_KP_Next,                 Qt::Key_PageDown,
-    XKB_KEY_KP_End,                  Qt::Key_End,
-    XKB_KEY_KP_Begin,                Qt::Key_Clear,
-    XKB_KEY_KP_Insert,               Qt::Key_Insert,
-    XKB_KEY_KP_Delete,               Qt::Key_Delete,
-    XKB_KEY_KP_Equal,                Qt::Key_Equal,
-    XKB_KEY_KP_Multiply,             Qt::Key_Asterisk,
-    XKB_KEY_KP_Add,                  Qt::Key_Plus,
-    XKB_KEY_KP_Separator,            Qt::Key_Comma,
-    XKB_KEY_KP_Subtract,             Qt::Key_Minus,
-    XKB_KEY_KP_Decimal,              Qt::Key_Period,
-    XKB_KEY_KP_Divide,               Qt::Key_Slash,
-
-    XKB_KEY_ISO_Level3_Shift,        Qt::Key_AltGr,
-    XKB_KEY_Multi_key,               Qt::Key_Multi_key,
-    XKB_KEY_Codeinput,               Qt::Key_Codeinput,
-    XKB_KEY_SingleCandidate,         Qt::Key_SingleCandidate,
-    XKB_KEY_MultipleCandidate,       Qt::Key_MultipleCandidate,
-    XKB_KEY_PreviousCandidate,       Qt::Key_PreviousCandidate,
-
-    XKB_KEY_Mode_switch,             Qt::Key_Mode_switch,
-    XKB_KEY_script_switch,           Qt::Key_Mode_switch,
-
-    0,                          0
-};
-
-int QWaylandInputDevice::Keyboard::keysymToQtKey(xkb_keysym_t key)
-{
-    PMTRACE_QTWLCLI_FUNCTION;
-    int code = 0;
-    int i = 0;
-    while (KeyTbl[i]) {
-        if (key == KeyTbl[i]) {
-            code = (int)KeyTbl[i+1];
-            break;
-        }
-        i += 2;
-    }
-
-    return code;
-}
-
-int QWaylandInputDevice::Keyboard::keysymToQtKey(xkb_keysym_t keysym, Qt::KeyboardModifiers &modifiers, const QString &text)
-{
-    PMTRACE_QTWLCLI_FUNCTION;
-    int code = 0;
-
-    if (keysym >= XKB_KEY_F1 && keysym <= XKB_KEY_F35) {
-        code =  Qt::Key_F1 + (int(keysym) - XKB_KEY_F1);
-    } else if (keysym >= XKB_KEY_KP_Space && keysym <= XKB_KEY_KP_9) {
-        if (keysym >= XKB_KEY_KP_0) {
-            // numeric keypad keys
-            code = Qt::Key_0 + ((int)keysym - XKB_KEY_KP_0);
-        } else {
-            code = keysymToQtKey(keysym);
-        }
-        modifiers |= Qt::KeypadModifier;
-    } else if (text.length() == 1 && text.unicode()->unicode() > 0x1f
-        && text.unicode()->unicode() != 0x7f
-        && !(keysym >= XKB_KEY_dead_grave && keysym <= XKB_KEY_dead_currency)) {
-        code = text.unicode()->toUpper().unicode();
-    } else {
-        // any other keys
-        code = keysymToQtKey(keysym);
-    }
-
-    return code;
-}
-
-#endif // QT_NO_WAYLAND_XKB
 
 void QWaylandInputDevice::Keyboard::keyboard_keymap(uint32_t format, int32_t fd, uint32_t size)
 {
@@ -838,8 +789,7 @@ void QWaylandInputDevice::Keyboard::keyboard_enter(uint32_t time, struct wl_surf
     QWaylandWindow *window = QWaylandWindow::fromWlSurface(surface);
     mFocus = window;
 
-    mParent->mQDisplay->setLastKeyboardFocusInputDevice(mParent);
-    QWindowSystemInterface::handleWindowActivated(mFocus->window());
+    mParent->mQDisplay->handleKeyboardFocusChanged(mParent);
 }
 
 void QWaylandInputDevice::Keyboard::keyboard_leave(uint32_t time, struct wl_surface *surface)
@@ -855,8 +805,9 @@ void QWaylandInputDevice::Keyboard::keyboard_leave(uint32_t time, struct wl_surf
 
     mFocus = NULL;
 
-    mParent->mQDisplay->setLastKeyboardFocusInputDevice(0);
-    QWindowSystemInterface::handleWindowActivated(0);
+    mParent->mQDisplay->handleKeyboardFocusChanged(mParent);
+
+    mRepeatTimer.stop();
 }
 
 void QWaylandInputDevice::Keyboard::keyboard_key(uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
@@ -894,6 +845,13 @@ void QWaylandInputDevice::Keyboard::keyboard_key(uint32_t serial, uint32_t time,
 
     qtkey = keysymToQtKey(sym, modifiers, text);
 
+
+    // Map control + letter to proper text
+    if (utf32 >= 'A' && utf32 <= '~' && (modifiers & Qt::ControlModifier)) {
+        utf32 &= ~0x60;
+        text = QString::fromUcs4(&utf32, 1);
+    }
+
     QWindowSystemInterface::handleExtendedKeyEvent(window->window(),
                                                     time, type, qtkey,
                                                     modifiers,
@@ -930,7 +888,6 @@ void QWaylandInputDevice::Keyboard::repeatKey()
 {
     PMTRACE_QTWLCLI_FUNCTION;
     mRepeatTimer.setInterval(25);
-
     QWindowSystemInterface::handleExtendedKeyEvent(mFocus->window(),
                                                    mRepeatTime, QEvent::KeyRelease, mRepeatKey,
                                                    modifiers(),
@@ -1086,6 +1043,16 @@ bool QWaylandInputDevice::Touch::allTouchPointsReleased()
     return true;
 }
 
+void QWaylandInputDevice::Touch::releasePoints()
+{
+    Q_FOREACH (const QWindowSystemInterface::TouchPoint &previousPoint, mPrevTouchPoints) {
+        QWindowSystemInterface::TouchPoint tp = previousPoint;
+        tp.state = Qt::TouchPointReleased;
+        mTouchPoints.append(tp);
+    }
+    touch_frame();
+}
+
 void QWaylandInputDevice::Touch::touch_frame()
 {
     PMTRACE_QTWLCLI_FUNCTION;
@@ -1132,6 +1099,8 @@ void QWaylandInputDevice::Touch::touch_frame()
         mPrevTouchPoints = mTouchPoints;
 
     mTouchPoints.clear();
+}
+
 }
 
 QT_END_NAMESPACE

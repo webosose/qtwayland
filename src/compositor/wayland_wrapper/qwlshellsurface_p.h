@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -40,6 +40,17 @@
 
 #ifndef WLSHELLSURFACE_H
 #define WLSHELLSURFACE_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <QtCompositor/qwaylandexport.h>
 #include <QtCompositor/qwaylandsurface.h>
@@ -140,7 +151,7 @@ private:
     void shell_surface_set_fullscreen(Resource *resource,
                                       uint32_t method,
                                       uint32_t framerate,
-                                      struct wl_resource *output) Q_DECL_OVERRIDE;
+                                      struct wl_resource *output_resource) Q_DECL_OVERRIDE;
     void shell_surface_set_popup(Resource *resource,
                                  struct wl_resource *input_device,
                                  uint32_t time,
@@ -149,7 +160,7 @@ private:
                                  int32_t y,
                                  uint32_t flags) Q_DECL_OVERRIDE;
     void shell_surface_set_maximized(Resource *resource,
-                                     struct wl_resource *output) Q_DECL_OVERRIDE;
+                                     struct wl_resource *output_resource) Q_DECL_OVERRIDE;
     void shell_surface_pong(Resource *resource,
                             uint32_t serial) Q_DECL_OVERRIDE;
     void shell_surface_set_title(Resource *resource,

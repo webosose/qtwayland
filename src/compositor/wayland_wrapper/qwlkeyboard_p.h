@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidi ary(-ies).
+** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -18,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,6 +41,17 @@
 
 #ifndef QTWAYLAND_QWLKEYBOARD_P_H
 #define QTWAYLAND_QWLKEYBOARD_P_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <QtCompositor/qwaylandexport.h>
 #include <QtCompositor/qwaylandinput.h>
@@ -99,12 +110,20 @@ public:
     void modifiers(uint32_t serial, uint32_t mods_depressed,
                 uint32_t mods_latched, uint32_t mods_locked, uint32_t group);
 
-   void startGrab(KeyboardGrabber *grab);
-   void endGrab();
-   KeyboardGrabber *currentGrab() const;
+    void keyEvent(uint code, uint32_t state);
+    void updateKeymap();
 
-   void updateModifierState(uint code, uint32_t state, bool repeat);
-   void updateModifierState(Keyboard *refKeyboard);
+    void startGrab(KeyboardGrabber *grab);
+    void endGrab();
+    KeyboardGrabber *currentGrab() const;
+
+    void updateModifierState(uint code, uint32_t state, bool repeat);
+    void updateModifierState(Keyboard *refKeyboard);
+
+#ifndef QT_NO_WAYLAND_XKB
+    struct xkb_state *xkbState() const { return m_state; }
+    uint32_t xkbModsMask() const { return m_modsDepressed | m_modsLatched | m_modsLocked; }
+#endif
 
 Q_SIGNALS:
     void focusChanged(Surface *surface);
@@ -112,18 +131,20 @@ Q_SIGNALS:
 protected:
     void keyboard_bind_resource(Resource *resource);
     void keyboard_destroy_resource(Resource *resource);
+    void keyboard_release(Resource *resource) Q_DECL_OVERRIDE;
 
 private:
     void checkFocusResource(wl_keyboard::Resource *resource);
     void sendEnter(Surface *surface, wl_keyboard::Resource *resource);
 
     void sendKeyEvent(uint code, uint32_t state, bool repeat);
-    void updateKeymap();
     void focusDestroyed(void *data);
     void pendingFocusDestroyed(void *data);
 
 #ifndef QT_NO_WAYLAND_XKB
     void initXKB();
+    void createXKBKeymap();
+    void createXKBState(xkb_keymap *keymap);
     void releaseXKB();
 #endif
 

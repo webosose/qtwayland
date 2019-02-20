@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -52,6 +44,8 @@
 #include <wayland-cursor.h>
 
 QT_BEGIN_NAMESPACE
+
+namespace QtWaylandClient {
 
 QWaylandCursor::QWaylandCursor(QWaylandScreen *screen)
     : mDisplay(screen->display())
@@ -91,7 +85,8 @@ struct wl_cursor_image *QWaylandCursor::cursorImage(Qt::CursorShape newShape)
     if (newShape < Qt::BitmapCursor) {
         waylandCursor = requestCursor((WaylandCursor)newShape);
     } else if (newShape == Qt::BitmapCursor) {
-        //TODO: Bitmap cursor logic
+        // cannot create a wl_cursor_image for a CursorShape
+        return Q_NULLPTR;
     } else {
         //TODO: Custom cursor logic (for resize arrows)
     }
@@ -111,11 +106,27 @@ struct wl_cursor_image *QWaylandCursor::cursorImage(Qt::CursorShape newShape)
     return image;
 }
 
+QSharedPointer<QWaylandBuffer> QWaylandCursor::cursorBitmapImage(const QCursor *cursor)
+{
+    if (cursor->shape() != Qt::BitmapCursor)
+        return QSharedPointer<QWaylandShmBuffer>();
+
+    const QImage &img = cursor->pixmap().toImage();
+    QSharedPointer<QWaylandShmBuffer> buffer(new QWaylandShmBuffer(mDisplay, img.size(), img.format()));
+    memcpy(buffer->image()->bits(), img.bits(), img.byteCount());
+    return buffer;
+}
+
 void QWaylandCursor::changeCursor(QCursor *cursor, QWindow *window)
 {
     Q_UNUSED(window)
 
     const Qt::CursorShape newShape = cursor ? cursor->shape() : Qt::ArrowCursor;
+
+    if (newShape == Qt::BitmapCursor) {
+        mDisplay->setCursor(cursorBitmapImage(cursor), cursor->hotSpot());
+        return;
+    }
 
     struct wl_cursor_image *image = cursorImage(newShape);
     if (!image) {
@@ -133,6 +144,16 @@ void QWaylandDisplay::setCursor(struct wl_buffer *buffer, struct wl_cursor_image
     for (int i = 0; i < mInputDevices.count(); i++) {
         QWaylandInputDevice *inputDevice = mInputDevices.at(i);
         inputDevice->setCursor(buffer, image);
+    }
+}
+
+void QWaylandDisplay::setCursor(const QSharedPointer<QWaylandBuffer> &buffer, const QPoint &hotSpot)
+{
+    /* Qt doesn't tell us which input device we should set the cursor
+     * for, so set it for all devices. */
+    for (int i = 0; i < mInputDevices.count(); i++) {
+        QWaylandInputDevice *inputDevice = mInputDevices.at(i);
+        inputDevice->setCursor(buffer, hotSpot);
     }
 }
 
@@ -167,7 +188,7 @@ wl_cursor *QWaylandCursor::requestCursor(WaylandCursor shape)
             return NULL;
 
         QList<QByteArray> cursorNames = mCursorNamesMap.values(shape);
-        foreach (QByteArray name, cursorNames) {
+        foreach (const QByteArray &name, cursorNames) {
             cursor = wl_cursor_theme_get_cursor(mCursorTheme, name.constData());
             if (cursor) {
                 mCursors.insert(shape, cursor);
@@ -303,6 +324,8 @@ void QWaylandCursor::initCursorMap()
 
     mCursorNamesMap.insert(ResizeSouthWestCursor, "sw-resize");
     mCursorNamesMap.insert(ResizeSouthWestCursor, "bottom_left_corner");
+}
+
 }
 
 QT_END_NAMESPACE

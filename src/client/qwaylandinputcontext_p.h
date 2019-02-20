@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,11 +41,24 @@
 #ifndef QWAYLANDINPUTCONTEXT_H
 #define QWAYLANDINPUTCONTEXT_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qpa/qplatforminputcontext.h>
 
 #include <QtWaylandClient/private/qwayland-text.h>
 
 QT_BEGIN_NAMESPACE
+
+namespace QtWaylandClient {
 
 class QWaylandDisplay;
 
@@ -64,7 +77,7 @@ protected:
     void text_input_commit_string(uint32_t serial, const QString &text) Q_DECL_OVERRIDE;
     void text_input_enter(wl_surface *surface) Q_DECL_OVERRIDE;
     void text_input_leave() Q_DECL_OVERRIDE;
-    void text_input_keysym(uint32_t serial, uint32_t time, uint32_t sym, uint32_t state, uint32_t modifiers);
+    void text_input_keysym(uint32_t serial, uint32_t time, uint32_t sym, uint32_t state, uint32_t modifiers) Q_DECL_OVERRIDE;
 
 private:
     QString m_commit;
@@ -98,6 +111,8 @@ private:
     QWaylandDisplay *mDisplay;
     QScopedPointer<QWaylandTextInput> mTextInput;
 };
+
+}
 
 QT_END_NAMESPACE
 

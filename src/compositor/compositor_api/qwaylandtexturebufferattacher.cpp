@@ -38,6 +38,7 @@
 
 #include <QtCompositor/qwaylandquicksurface.h>
 #include <QtCompositor/qwaylandcompositor.h>
+#include "qwaylandoutput.h"
 
 QWaylandTextureBufferAttacher::QWaylandTextureBufferAttacher(QWaylandQuickSurface *surface)
     : m_surface(surface)
@@ -66,7 +67,11 @@ void QWaylandTextureBufferAttacher::updateTexture()
     delete m_texture;
     m_texture = 0;
 
-    QQuickWindow *window = static_cast<QQuickWindow *>(m_surface->compositor()->window());
+    QWaylandOutput *output = m_surface->compositor()->primaryOutput();
+    if (!output)
+        return;
+
+    QQuickWindow *window = static_cast<QQuickWindow *>(output->window());
     if (m_nextBuffer) {
         if (m_buffer.isShm()) {
             m_texture = window->createTextureFromImage(m_buffer.image());

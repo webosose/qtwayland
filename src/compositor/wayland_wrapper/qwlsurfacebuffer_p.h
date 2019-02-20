@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -40,6 +40,17 @@
 
 #ifndef SURFACEBUFFER_H
 #define SURFACEBUFFER_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <QtCore/QRect>
 #include <QtGui/qopengl.h>
@@ -95,7 +106,14 @@ public:
     bool isDestroyed() { return m_destroyed; }
 
     void createTexture();
+    uint textureTarget() const;
+    void updateTexture();
+#ifdef QT_COMPOSITOR_WAYLAND_GL
     inline GLuint texture() const;
+#else
+    inline uint texture() const;
+#endif
+
     void destroyTexture();
 
     inline struct ::wl_resource *waylandBufferHandle() const { return m_buffer; }
@@ -150,12 +168,19 @@ private:
     friend class ::QWaylandBufferRef;
 };
 
+#ifdef QT_COMPOSITOR_WAYLAND_GL
 GLuint SurfaceBuffer::texture() const
 {
     if (m_buffer)
         return m_texture;
     return 0;
 }
+#else
+uint SurfaceBuffer::texture() const
+{
+    return 0;
+}
+#endif
 
 }
 

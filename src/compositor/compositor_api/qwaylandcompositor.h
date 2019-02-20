@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -56,12 +56,15 @@ class QInputEvent;
 class QMimeData;
 class QUrl;
 class QOpenGLContext;
+class QWaylandClient;
 class QWaylandSurface;
 class QWaylandInputDevice;
 class QWaylandInputPanel;
 class QWaylandDrag;
 class QWaylandGlobalInterface;
 class QWaylandSurfaceView;
+class QWaylandOutput;
+class wl_client;
 
 namespace QtWayland
 {
@@ -73,19 +76,18 @@ class Q_COMPOSITOR_EXPORT QWaylandCompositor
 public:
     enum ExtensionFlag {
         WindowManagerExtension = 0x01,
-        OutputExtension = 0x02,
-        SurfaceExtension = 0x04,
-        QtKeyExtension = 0x08,
-        TouchExtension = 0x10,
-        SubSurfaceExtension = 0x20,
-        TextInputExtension = 0x40,
-        HardwareIntegrationExtension = 0x80,
+        SurfaceExtension = 0x02,
+        QtKeyExtension = 0x04,
+        TouchExtension = 0x08,
+        SubSurfaceExtension = 0x10,
+        TextInputExtension = 0x20,
+        HardwareIntegrationExtension = 0x40,
 
-        DefaultExtensions = WindowManagerExtension | OutputExtension | SurfaceExtension | QtKeyExtension | TouchExtension | HardwareIntegrationExtension
+        DefaultExtensions = WindowManagerExtension | SurfaceExtension | QtKeyExtension | TouchExtension | HardwareIntegrationExtension
     };
     Q_DECLARE_FLAGS(ExtensionFlags, ExtensionFlag)
 
-    QWaylandCompositor(QWindow *window = 0, const char *socketName = 0, ExtensionFlags extensions = DefaultExtensions);
+    QWaylandCompositor(const char *socketName = Q_NULLPTR, ExtensionFlags extensions = DefaultExtensions);
     virtual ~QWaylandCompositor();
 
     void addGlobalInterface(QWaylandGlobalInterface *interface);
@@ -96,12 +98,16 @@ public:
     void sendFrameCallbacks(QList<QWaylandSurface *> visibleSurfaces);
 
     void destroyClientForSurface(QWaylandSurface *surface);
-    void destroyClient(WaylandClient *client);
+    void destroyClient(QWaylandClient *client);
 
-    QList<QWaylandSurface *> surfacesForClient(WaylandClient* client) const;
+    QList<QWaylandSurface *> surfacesForClient(QWaylandClient* client) const;
     QList<QWaylandSurface *> surfaces() const;
 
-    QWindow *window()const;
+    QList<QWaylandOutput *> outputs() const;
+    QWaylandOutput *output(QWindow *window);
+
+    QWaylandOutput *primaryOutput() const;
+    void setPrimaryOutput(QWaylandOutput *output);
 
     qreal devicePixelRatio() const;
 
@@ -111,7 +117,7 @@ public:
     virtual QWaylandSurfaceView *pickView(const QPointF &globalPosition) const;
     virtual QPointF mapToView(QWaylandSurfaceView *view, const QPointF &surfacePosition) const;
 
-    virtual bool openUrl(WaylandClient *client, const QUrl &url);
+    virtual bool openUrl(QWaylandClient *client, const QUrl &url);
 
     QtWayland::Compositor *handle() const;
 
@@ -123,13 +129,16 @@ public:
 
     const char *socketName() const;
 
+#if QT_DEPRECATED_SINCE(5, 5)
     void setScreenOrientation(Qt::ScreenOrientation orientation);
+    void setScreenOrientation(QWaylandOutput *output, Qt::ScreenOrientation orientation);
 
     void setOutputGeometry(const QRect &outputGeometry);
     QRect outputGeometry() const;
 
     void setOutputRefreshRate(int refreshRate);
     int outputRefreshRate() const;
+#endif
 
     QWaylandInputDevice *defaultInputDevice() const;
 
@@ -140,7 +149,7 @@ public:
     void sendDragMoveEvent(const QPoint &global, const QPoint &local, QWaylandSurface *surface);
     void sendDragEndEvent();
 
-    virtual void setCursorSurface(QWaylandSurface *surface, int hotspotX, int hotspotY, WaylandClient *client = 0);
+    virtual void setCursorSurface(QWaylandSurface *surface, int hotspotX, int hotspotY, wl_client *client = 0);
 
     void cleanupGraphicsResources();
 
@@ -155,14 +164,15 @@ public:
     virtual QWaylandInputDevice *inputDeviceFor(QInputEvent *inputEvent);
 
 protected:
-    QWaylandCompositor(QWindow *window, const char *socketName, QtWayland::Compositor *dptr);
+    QWaylandCompositor(const char *socketName, QtWayland::Compositor *dptr);
     virtual void retainedSelectionReceived(QMimeData *mimeData);
+
+    virtual QWaylandOutput *createOutput(QWindow *window,
+                                         const QString &manufacturer,
+                                         const QString &model);
 
     friend class QtWayland::Compositor;
     QtWayland::Compositor *m_compositor;
-
-private:
-    QWindow  *m_toplevel_window;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QWaylandCompositor::ExtensionFlags)

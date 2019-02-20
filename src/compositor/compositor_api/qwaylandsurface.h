@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2014-2015 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -54,12 +55,14 @@ struct wl_resource;
 QT_BEGIN_NAMESPACE
 
 class QTouchEvent;
+class QWaylandClient;
 class QWaylandSurfacePrivate;
 class QWaylandCompositor;
 class QWaylandBufferRef;
 class QWaylandSurfaceView;
 class QWaylandSurfaceInterface;
 class QWaylandSurfaceOp;
+class QWaylandOutput;
 
 namespace QtWayland {
 class Surface;
@@ -79,10 +82,43 @@ protected:
     friend class QtWayland::Surface;
 };
 
+class QWaylandSurfaceEnterEventPrivate;
+
+class Q_COMPOSITOR_EXPORT QWaylandSurfaceEnterEvent : public QEvent
+{
+public:
+    QWaylandSurfaceEnterEvent(QWaylandOutput *output);
+    ~QWaylandSurfaceEnterEvent();
+
+    QWaylandOutput *output() const;
+
+    static const QEvent::Type WaylandSurfaceEnter;
+
+private:
+    QWaylandSurfaceEnterEventPrivate *d;
+};
+
+class QWaylandSurfaceLeaveEventPrivate;
+
+class Q_COMPOSITOR_EXPORT QWaylandSurfaceLeaveEvent : public QEvent
+{
+public:
+    QWaylandSurfaceLeaveEvent(QWaylandOutput *output);
+    ~QWaylandSurfaceLeaveEvent();
+
+    QWaylandOutput *output() const;
+
+    static const QEvent::Type WaylandSurfaceLeave;
+
+private:
+    QWaylandSurfaceLeaveEventPrivate *d;
+};
+
 class Q_COMPOSITOR_EXPORT QWaylandSurface : public QObject
 {
     Q_OBJECT
     Q_DECLARE_PRIVATE(QWaylandSurface)
+    Q_PROPERTY(QWaylandClient *client READ client CONSTANT)
     Q_PROPERTY(QSize size READ size NOTIFY sizeChanged)
     Q_PROPERTY(QWaylandSurface::WindowFlags windowFlags READ windowFlags NOTIFY windowFlagsChanged)
     Q_PROPERTY(QWaylandSurface::WindowType windowType READ windowType NOTIFY windowTypeChanged)
@@ -121,7 +157,7 @@ public:
     QWaylandSurface(wl_client *client, quint32 id, int version, QWaylandCompositor *compositor);
     virtual ~QWaylandSurface();
 
-    WaylandClient *client() const;
+    QWaylandClient *client() const;
 
     QWaylandSurface *parentSurface() const;
     QLinkedList<QWaylandSurface *> subSurfaces() const;
@@ -154,12 +190,16 @@ public:
 
     QtWayland::Surface *handle();
 
-    qint64 processId() const;
     QByteArray authenticationToken() const;
     QVariantMap windowProperties() const;
     void setWindowProperty(const QString &name, const QVariant &value);
 
     QWaylandCompositor *compositor() const;
+
+    QWaylandOutput *mainOutput() const;
+    void setMainOutput(QWaylandOutput *mainOutput);
+
+    QList<QWaylandOutput *> outputs() const;
 
     QString className() const;
 
@@ -188,7 +228,7 @@ public:
 
     static QWaylandSurface *fromResource(::wl_resource *resource);
 
-public slots:
+public Q_SLOTS:
     void updateSelection();
 
 protected:
@@ -219,6 +259,7 @@ Q_SIGNALS:
 
     friend class QWaylandSurfaceView;
     friend class QWaylandSurfaceInterface;
+    friend class QtWayland::Surface;
 };
 
 class QWaylandUnmapLockPrivate;

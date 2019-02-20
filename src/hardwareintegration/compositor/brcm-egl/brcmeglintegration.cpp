@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -52,7 +52,6 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
-#define EGL_EGLEXT_PROTOTYPES
 #include <EGL/eglext_brcm.h>
 
 #include <GLES2/gl2.h>
@@ -92,7 +91,7 @@ void BrcmEglIntegration::initializeHardware(QtWayland::Display *waylandDisplay)
         if (!d->egl_display)
             qWarning("Failed to acquire EGL display from platform integration");
 
-        d->eglQueryGlobalImageBRCM = eglQueryGlobalImageBRCM;
+        d->eglQueryGlobalImageBRCM = (PFNEGLQUERYGLOBALIMAGEBRCMPROC) eglGetProcAddress("eglQueryGlobalImageBRCM");
 
         if (!d->eglQueryGlobalImageBRCM) {
             qWarning("Failed to resolve eglQueryGlobalImageBRCM");

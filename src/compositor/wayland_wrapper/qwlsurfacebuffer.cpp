@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -49,6 +49,9 @@
 #endif
 
 #include <QtCore/QDebug>
+
+#include <wayland-server-protocol.h>
+#include "qwaylandshmformathelper.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -96,8 +99,12 @@ void SurfaceBuffer::initialize(struct ::wl_resource *buffer)
     m_size = QSize();
     m_destroy_listener.surfaceBuffer = this;
     m_destroy_listener.listener.notify = destroy_listener_callback;
-    if (buffer)
+    if (buffer) {
+        ClientBufferIntegration *hwIntegration = m_compositor->clientBufferIntegration();
+        hwIntegration->unlockNativeBuffer(m_handle);
+        hwIntegration->initialize(buffer);
         wl_signal_add(&buffer->destroy_signal, &m_destroy_listener.listener);
+    }
 }
 
 void SurfaceBuffer::destructBufferState()
@@ -183,10 +190,20 @@ void SurfaceBuffer::destroyTexture()
         if (hwIntegration->textureForBuffer(m_buffer) == 0)
             glDeleteTextures(1, &m_texture);
         else
-            hwIntegration->destroyTextureForBuffer(m_buffer);
+            hwIntegration->destroyTextureForBuffer(m_buffer, m_texture);
         m_texture = 0;
     }
 #endif
+}
+
+uint SurfaceBuffer::textureTarget() const
+{
+#ifdef QT_COMPOSITOR_WAYLAND_GL
+    ClientBufferIntegration *hwIntegration = m_compositor->clientBufferIntegration();
+    return hwIntegration->textureTargetForBuffer(m_buffer);
+#endif
+
+    return 0;
 }
 
 void SurfaceBuffer::handleAboutToBeDisplayed()
@@ -235,7 +252,8 @@ QImage SurfaceBuffer::image()
         int stride = wl_shm_buffer_get_stride(m_shmBuffer);
         int width = wl_shm_buffer_get_width(m_shmBuffer);
         int height = wl_shm_buffer_get_height(m_shmBuffer);
-        m_image = QImage(data, width, height, stride, QImage::Format_ARGB32_Premultiplied);
+        QImage::Format format = QWaylandShmFormatHelper::fromWaylandShmFormat(wl_shm_format(wl_shm_buffer_get_format(m_shmBuffer)));
+        m_image = QImage(data, width, height, stride, format);
     }
 
     return m_image;
@@ -260,14 +278,18 @@ void SurfaceBuffer::createTexture()
 
     ClientBufferIntegration *hwIntegration = m_compositor->clientBufferIntegration();
 #ifdef QT_COMPOSITOR_WAYLAND_GL
-    if (!m_texture)
-        m_texture = hwIntegration->textureForBuffer(m_buffer);
-    if (!m_texture)
-        glGenTextures(1, &m_texture);
-    glBindTexture(GL_TEXTURE_2D, m_texture);
+    m_texture = hwIntegration->textureForBuffer(m_buffer);
     hwIntegration->bindTextureToBuffer(m_buffer);
 #else
     Q_UNUSED(hwIntegration);
+#endif
+}
+
+void SurfaceBuffer::updateTexture()
+{
+#ifdef QT_COMPOSITOR_WAYLAND_GL
+    ClientBufferIntegration *hwIntegration = m_compositor->clientBufferIntegration();
+    hwIntegration->updateTextureForBuffer(m_buffer);
 #endif
 }
 

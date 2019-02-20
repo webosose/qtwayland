@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -43,7 +35,6 @@
 
 #include "qwaylanddisplay_p.h"
 #include "qwaylandcursor_p.h"
-#include "qwaylandextendedoutput_p.h"
 #include "qwaylandwindow_p.h"
 #include "qwaylandintegration_p.h"
 
@@ -54,27 +45,32 @@
 
 QT_BEGIN_NAMESPACE
 
+namespace QtWaylandClient {
+
 QWaylandScreen::QWaylandScreen(QWaylandDisplay *waylandDisplay, int version, uint32_t id)
     : QPlatformScreen()
     , QtWayland::wl_output(waylandDisplay->wl_registry(), id, qMin(version, 2))
     , m_outputId(id)
     , mWaylandDisplay(waylandDisplay)
-    , mExtendedOutput(0)
+    , mScale(1)
     , mDepth(32)
     , mRefreshRate(60000)
     , mTransform(-1)
     , mFormat(QImage::Format_ARGB32_Premultiplied)
     , mOutputName(QStringLiteral("Screen%1").arg(id))
     , m_orientation(Qt::PrimaryOrientation)
+    , mWaylandCursor(0)
 {
-    mWaylandCursor = mWaylandDisplay->integration()->createPlatformCursor(this);
-    // handle case of output extension global being sent after outputs
-    createExtendedOutput();
 }
 
 QWaylandScreen::~QWaylandScreen()
 {
     delete mWaylandCursor;
+}
+
+void QWaylandScreen::init()
+{
+    mWaylandCursor = mWaylandDisplay->integration()->createPlatformCursor(this);
 }
 
 QWaylandDisplay * QWaylandScreen::display() const
@@ -84,7 +80,9 @@ QWaylandDisplay * QWaylandScreen::display() const
 
 QRect QWaylandScreen::geometry() const
 {
-    return mGeometry;
+    // Scale geometry for QScreen. This makes window and screen
+    // geometry be in the same coordinate system.
+    return QRect(mGeometry.topLeft(), mGeometry.size() / mScale);
 }
 
 int QWaylandScreen::depth() const
@@ -117,7 +115,9 @@ QDpi QWaylandScreen::logicalDpi() const
 QList<QPlatformScreen *> QWaylandScreen::virtualSiblings() const
 {
     QList<QPlatformScreen *> list;
-    foreach (QWaylandScreen *screen, mWaylandDisplay->screens())
+    const QList<QWaylandScreen*> screens = mWaylandDisplay->screens();
+    list.reserve(screens.count());
+    foreach (QWaylandScreen *screen, screens)
         list << screen;
     return list;
 }
@@ -136,6 +136,16 @@ Qt::ScreenOrientation QWaylandScreen::orientation() const
     return m_orientation;
 }
 
+int QWaylandScreen::scale() const
+{
+    return mScale;
+}
+
+qreal QWaylandScreen::devicePixelRatio() const
+{
+    return qreal(mScale);
+}
+
 qreal QWaylandScreen::refreshRate() const
 {
     return mRefreshRate / 1000.f;
@@ -144,18 +154,6 @@ qreal QWaylandScreen::refreshRate() const
 QPlatformCursor *QWaylandScreen::cursor() const
 {
     return  mWaylandCursor;
-}
-
-QWaylandExtendedOutput *QWaylandScreen::extendedOutput() const
-{
-    return mExtendedOutput;
-}
-
-void QWaylandScreen::createExtendedOutput()
-{
-    QtWayland::qt_output_extension *extension = mWaylandDisplay->outputExtension();
-    if (!mExtendedOutput && extension)
-        mExtendedOutput = new QWaylandExtendedOutput(this, extension->get_extended_output(output()));
 }
 
 QWaylandScreen * QWaylandScreen::waylandScreenFromWindow(QWindow *window)
@@ -197,6 +195,11 @@ void QWaylandScreen::output_geometry(int32_t x, int32_t y,
     mGeometry.moveTopLeft(QPoint(x, y));
 }
 
+void QWaylandScreen::output_scale(int32_t factor)
+{
+    mScale = factor;
+}
+
 void QWaylandScreen::output_done()
 {
     // the done event is sent after all the geometry and the mode events are sent,
@@ -231,6 +234,8 @@ void QWaylandScreen::output_done()
     }
     QWindowSystemInterface::handleScreenGeometryChange(screen(), mGeometry, mGeometry);
     QWindowSystemInterface::handleScreenRefreshRateChange(screen(), refreshRate());
+}
+
 }
 
 QT_END_NAMESPACE

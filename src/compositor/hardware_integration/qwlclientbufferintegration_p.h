@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -40,6 +40,17 @@
 
 #ifndef QWAYLANDCLIENTBUFFERINTEGRATION_H
 #define QWAYLANDCLIENTBUFFERINTEGRATION_H
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
 #include <QtCompositor/qwaylandexport.h>
 #include <QtCore/QSize>
@@ -64,13 +75,28 @@ public:
 
     virtual void initializeHardware(QtWayland::Display *waylandDisplay) = 0;
 
-    // Used when the hardware integration wants to provide its own texture for a given buffer.
-    // In most cases the compositor creates and manages the texture so this is not needed.
-    virtual GLuint textureForBuffer(struct ::wl_resource *buffer) { Q_UNUSED(buffer); return 0; }
-    virtual void destroyTextureForBuffer(struct ::wl_resource *buffer) { Q_UNUSED(buffer); }
+    virtual void initialize(struct ::wl_resource *buffer) { Q_UNUSED(buffer); }
+
+    virtual GLenum textureTargetForBuffer(struct ::wl_resource *buffer) const { Q_UNUSED(buffer); return GL_TEXTURE_2D; }
+
+    virtual GLuint textureForBuffer(struct ::wl_resource *buffer) {
+        Q_UNUSED(buffer);
+        GLuint texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        return texture;
+    }
+
+    virtual void destroyTextureForBuffer(struct ::wl_resource *buffer, GLuint texture)
+    {
+        Q_UNUSED(buffer);
+        glDeleteTextures(1, &texture);
+    }
 
     // Called with the texture bound.
     virtual void bindTextureToBuffer(struct ::wl_resource *buffer) = 0;
+
+    virtual void updateTextureForBuffer(struct ::wl_resource *buffer) { Q_UNUSED(buffer); }
 
     virtual bool isYInverted(struct ::wl_resource *) const { return true; }
 

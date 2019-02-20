@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt-project.org/legal
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -52,6 +52,8 @@
 
 QT_BEGIN_NAMESPACE
 
+namespace QtWaylandClient {
+
 static Qt::Key toQtKey(uint32_t sym)
 {
 #ifndef QT_NO_WAYLAND_XKB
@@ -72,6 +74,7 @@ static Qt::Key toQtKey(uint32_t sym)
         return Qt::Key_unknown;
     }
 #else
+    Q_UNUSED(sym)
     return Qt::Key_unknown;
 #endif
 }
@@ -275,6 +278,8 @@ bool QWaylandInputContext::ensureTextInput()
 
     mTextInput.reset(new QWaylandTextInput(mDisplay->textInputManager()->create_text_input()));
     return true;
+}
+
 }
 
 QT_END_NAMESPACE

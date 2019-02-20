@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the config.tests of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -52,9 +44,11 @@
 
 QT_BEGIN_NAMESPACE
 
+namespace QtWaylandClient {
+
 QWaylandWlShellSurface::QWaylandWlShellSurface(struct ::wl_shell_surface *shell_surface, QWaylandWindow *window)
-    : QtWayland::wl_shell_surface(shell_surface)
-    , QWaylandShellSurface(window)
+    : QWaylandShellSurface(window)
+    , QtWayland::wl_shell_surface(shell_surface)
     , m_window(window)
     , m_maximized(false)
     , m_fullscreen(false)
@@ -157,6 +151,13 @@ void QWaylandWlShellSurface::setTopLevel()
     set_toplevel();
 }
 
+static inline bool testShowWithoutActivating(const QWindow *window)
+{
+    // QWidget-attribute Qt::WA_ShowWithoutActivating.
+    const QVariant showWithoutActivating = window->property("_q_showWithoutActivating");
+    return showWithoutActivating.isValid() && showWithoutActivating.toBool();
+}
+
 void QWaylandWlShellSurface::updateTransientParent(QWindow *parent)
 {
     QWaylandWindow *parent_wayland_window = static_cast<QWaylandWindow *>(parent->handle());
@@ -165,8 +166,7 @@ void QWaylandWlShellSurface::updateTransientParent(QWindow *parent)
 
     // set_transient expects a position relative to the parent
     QPoint transientPos = m_window->geometry().topLeft(); // this is absolute
-    QWindow *parentWin = m_window->window()->transientParent();
-    transientPos -= parentWin->geometry().topLeft();
+    transientPos -= parent->geometry().topLeft();
     if (parent_wayland_window->decoration()) {
         transientPos.setX(transientPos.x() + parent_wayland_window->decoration()->margins().left());
         transientPos.setY(transientPos.y() + parent_wayland_window->decoration()->margins().top());
@@ -175,7 +175,8 @@ void QWaylandWlShellSurface::updateTransientParent(QWindow *parent)
     uint32_t flags = 0;
     Qt::WindowFlags wf = m_window->window()->flags();
     if (wf.testFlag(Qt::ToolTip)
-            || wf.testFlag(Qt::WindowTransparentForInput))
+            || wf.testFlag(Qt::WindowTransparentForInput)
+            || testShowWithoutActivating(m_window->window()))
         flags |= WL_SHELL_SURFACE_TRANSIENT_INACTIVE;
 
     set_transient(parent_wayland_window->object(),
@@ -223,6 +224,8 @@ void QWaylandWlShellSurface::shell_surface_configure(uint32_t edges,
 void QWaylandWlShellSurface::shell_surface_popup_done()
 {
     QCoreApplication::postEvent(m_window->window(), new QCloseEvent());
+}
+
 }
 
 QT_END_NAMESPACE

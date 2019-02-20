@@ -1,40 +1,32 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 Robin Burchell <robin.burchell@viroteck.net>
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +45,8 @@
 #include <QtWaylandClient/private/qwaylandshellsurface_p.h>
 
 QT_BEGIN_NAMESPACE
+
+namespace QtWaylandClient {
 
 #define BUTTON_SPACING 5
 
@@ -122,6 +116,14 @@ static const char * const qt_normalizeup_xpm[] = {
 #  define BUTTON_WIDTH 22
 #endif
 
+enum Button
+{
+    None,
+    Close,
+    Maximize,
+    Minimize
+};
+
 class Q_WAYLAND_CLIENT_EXPORT QWaylandBradientDecoration : public QWaylandAbstractDecoration
 {
 public:
@@ -136,6 +138,7 @@ private:
     void processMouseBottom(QWaylandInputDevice *inputDevice, const QPointF &local, Qt::MouseButtons b,Qt::KeyboardModifiers mods);
     void processMouseLeft(QWaylandInputDevice *inputDevice, const QPointF &local, Qt::MouseButtons b,Qt::KeyboardModifiers mods);
     void processMouseRight(QWaylandInputDevice *inputDevice, const QPointF &local, Qt::MouseButtons b,Qt::KeyboardModifiers mods);
+    bool clickButton(Qt::MouseButtons b, Button btn);
 
     QRectF closeButtonRect() const;
     QRectF maximizeButtonRect() const;
@@ -144,12 +147,14 @@ private:
     QColor m_foregroundColor;
     QColor m_backgroundColor;
     QStaticText m_windowTitle;
+    Button m_clicking;
 };
 
 
 
 QWaylandBradientDecoration::QWaylandBradientDecoration()
     : QWaylandAbstractDecoration()
+    , m_clicking(None)
 {
     QPalette palette;
     m_foregroundColor = palette.color(QPalette::Active, QPalette::HighlightedText);
@@ -321,25 +326,44 @@ void QWaylandBradientDecoration::paint(QPaintDevice *device)
 #endif
 }
 
+bool QWaylandBradientDecoration::clickButton(Qt::MouseButtons b, Button btn)
+{
+    if (isLeftClicked(b)) {
+        m_clicking = btn;
+        return false;
+    } else if (isLeftReleased(b)) {
+        if (m_clicking == btn) {
+            m_clicking = None;
+            return true;
+        } else {
+            m_clicking = None;
+        }
+    }
+    return false;
+}
+
 bool QWaylandBradientDecoration::handleMouse(QWaylandInputDevice *inputDevice, const QPointF &local, const QPointF &global, Qt::MouseButtons b, Qt::KeyboardModifiers mods)
 
 {
     Q_UNUSED(global);
 
     // Figure out what area mouse is in
-    if (closeButtonRect().contains(local) && isLeftClicked(b)) {
-        QWindowSystemInterface::handleCloseEvent(window());
-    } else if (maximizeButtonRect().contains(local) && isLeftClicked(b)) {
-        window()->setWindowState(waylandWindow()->isMaximized() ? Qt::WindowNoState : Qt::WindowMaximized);
-    } else if (minimizeButtonRect().contains(local) && isLeftClicked(b)) {
-        window()->setWindowState(Qt::WindowMinimized);
+    if (closeButtonRect().contains(local)) {
+        if (clickButton(b, Close))
+            QWindowSystemInterface::handleCloseEvent(window());
+    } else if (maximizeButtonRect().contains(local)) {
+        if (clickButton(b, Maximize))
+            window()->setWindowState(waylandWindow()->isMaximized() ? Qt::WindowNoState : Qt::WindowMaximized);
+    } else if (minimizeButtonRect().contains(local)) {
+        if (clickButton(b, Minimize))
+            window()->setWindowState(Qt::WindowMinimized);
     } else if (local.y() <= margins().top()) {
         processMouseTop(inputDevice,local,b,mods);
-    } else if (local.y() > window()->height() - margins().bottom() + margins().top()) {
+    } else if (local.y() > window()->height() + margins().top()) {
         processMouseBottom(inputDevice,local,b,mods);
     } else if (local.x() <= margins().left()) {
         processMouseLeft(inputDevice,local,b,mods);
-    } else if (local.x() > window()->width() - margins().right() + margins().left()) {
+    } else if (local.x() > window()->width() + margins().left()) {
         processMouseRight(inputDevice,local,b,mods);
     } else {
         waylandWindow()->restoreMouseCursor(inputDevice);
@@ -381,7 +405,7 @@ void QWaylandBradientDecoration::processMouseTop(QWaylandInputDevice *inputDevic
             //top left bit
             waylandWindow()->setMouseCursor(inputDevice, Qt::SizeFDiagCursor);
             startResize(inputDevice,WL_SHELL_SURFACE_RESIZE_TOP_LEFT,b);
-        } else if (local.x() > window()->width() - margins().right()) {
+        } else if (local.x() > window()->width() + margins().left()) {
             //top right bit
             waylandWindow()->setMouseCursor(inputDevice, Qt::SizeBDiagCursor);
             startResize(inputDevice,WL_SHELL_SURFACE_RESIZE_TOP_RIGHT,b);
@@ -404,7 +428,7 @@ void QWaylandBradientDecoration::processMouseBottom(QWaylandInputDevice *inputDe
         //bottom left bit
         waylandWindow()->setMouseCursor(inputDevice, Qt::SizeBDiagCursor);
         startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_BOTTOM_LEFT,b);
-    } else if (local.x() > window()->width() - margins().right()) {
+    } else if (local.x() > window()->width() + margins().left()) {
         //bottom right bit
         waylandWindow()->setMouseCursor(inputDevice, Qt::SizeFDiagCursor);
         startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_BOTTOM_RIGHT,b);
@@ -446,6 +470,7 @@ QWaylandAbstractDecoration *QWaylandBradientDecorationPlugin::create(const QStri
     return new QWaylandBradientDecoration();
 }
 
+}
 
 QT_END_NAMESPACE
 

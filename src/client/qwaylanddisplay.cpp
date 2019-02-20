@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
+** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -57,7 +49,6 @@
 #include "qwaylandshellintegration_p.h"
 #include "qwaylandclientbufferintegration_p.h"
 
-#include "qwaylandextendedoutput_p.h"
 #include "qwaylandextendedsurface_p.h"
 #include "qwaylandsubsurface_p.h"
 #include "qwaylandtouch_p.h"
@@ -75,6 +66,8 @@
 
 QT_BEGIN_NAMESPACE
 
+namespace QtWaylandClient {
+
 struct wl_surface *QWaylandDisplay::createSurface(void *handle)
 {
     struct wl_surface *surface = mCompositor.create_surface();
@@ -84,16 +77,8 @@ struct wl_surface *QWaylandDisplay::createSurface(void *handle)
 
 QWaylandShellSurface *QWaylandDisplay::createShellSurface(QWaylandWindow *window)
 {
-    if (mWaylandIntegration->shellIntegration())
-        return mWaylandIntegration->shellIntegration()->createShellSurface(window);
-
-    if (shellXdg()) {
-        return new QWaylandXdgSurface(shellXdg()->get_xdg_surface(window->object()), window);
-    } else if (shell()) {
-        return new QWaylandWlShellSurface(shell()->get_shell_surface(window->object()), window);
-    }
-
-    return Q_NULLPTR;
+    Q_ASSERT(mWaylandIntegration->shellIntegration());
+    return mWaylandIntegration->shellIntegration()->createShellSurface(window);
 }
 
 struct ::wl_region *QWaylandDisplay::createRegion(const QRegion &qregion)
@@ -106,6 +91,15 @@ struct ::wl_region *QWaylandDisplay::createRegion(const QRegion &qregion)
     return region;
 }
 
+::wl_subsurface *QWaylandDisplay::createSubSurface(QWaylandWindow *window, QWaylandWindow *parent)
+{
+    if (!mSubCompositor) {
+        return NULL;
+    }
+
+    return mSubCompositor->get_subsurface(window->object(), parent->object());
+}
+
 QWaylandClientBufferIntegration * QWaylandDisplay::clientBufferIntegration() const
 {
     return mWaylandIntegration->clientBufferIntegration();
@@ -116,23 +110,13 @@ QWaylandWindowManagerIntegration *QWaylandDisplay::windowManagerIntegration() co
     return mWindowManagerIntegration.data();
 }
 
-QWaylandInputDevice *QWaylandDisplay::lastKeyboardFocusInputDevice() const
-{
-    return mLastKeyboardFocusInputDevice;
-}
-
-void QWaylandDisplay::setLastKeyboardFocusInputDevice(QWaylandInputDevice *device)
-{
-    mLastKeyboardFocusInputDevice = device;
-}
-
 QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
     : mWaylandIntegration(waylandIntegration)
-    , mLastKeyboardFocusInputDevice(0)
+#ifndef QT_NO_DRAGANDDROP
     , mDndSelectionHandler(0)
+#endif
     , mWindowExtension(0)
-    , mSubSurfaceExtension(0)
-    , mOutputExtension(0)
+    , mSubCompositor(0)
     , mTouchExtension(0)
     , mQtKeyExtension(0)
     , mTextInputManager(0)
@@ -140,6 +124,8 @@ QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
     , mLastInputSerial(0)
     , mLastInputDevice(0)
     , mLastInputWindow(0)
+    , mLastKeyboardFocus(Q_NULLPTR)
+    , mSyncCallback(Q_NULLPTR)
 {
     qRegisterMetaType<uint32_t>("uint32_t");
 
@@ -159,9 +145,16 @@ QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
 
 QWaylandDisplay::~QWaylandDisplay(void)
 {
-    qDeleteAll(mScreens);
+    qDeleteAll(mInputDevices);
+    mInputDevices.clear();
+
+    foreach (QWaylandScreen *screen, mScreens) {
+        mWaylandIntegration->destroyScreen(screen);
+    }
     mScreens.clear();
+#ifndef QT_NO_DRAGANDDROP
     delete mDndSelectionHandler.take();
+#endif
     wl_display_disconnect(mDisplay);
 }
 
@@ -172,10 +165,7 @@ void QWaylandDisplay::checkError() const
         // special case this to provide a nicer error
         qWarning("The Wayland connection broke. Did the Wayland compositor die?");
     } else {
-        const struct wl_interface *errInterface = NULL;
-        uint32_t errCode, errId;
-        errCode = wl_display_get_protocol_error(mDisplay, &errInterface, &errId);
-        qCritical("The Wayland connection experienced a fatal error (%d, protocol error: code=%u, interface=%s, id=%u)", ecode, errCode, errInterface?errInterface->name:"", errId);
+        qErrnoWarning(ecode, "The Wayland connection experienced a fatal error");
     }
 }
 
@@ -247,30 +237,24 @@ void QWaylandDisplay::registry_global(uint32_t id, const QString &interface, uin
         mScreens.append(screen);
         // We need to get the output events before creating surfaces
         forceRoundTrip();
+        screen->init();
         mWaylandIntegration->screenAdded(screen);
     } else if (interface == QStringLiteral("wl_compositor")) {
         mCompositorVersion = qMin((int)version, 3);
         mCompositor.init(registry, id, mCompositorVersion);
     } else if (interface == QStringLiteral("wl_shm")) {
         mShm = static_cast<struct wl_shm *>(wl_registry_bind(registry, id, &wl_shm_interface,1));
-    } else if (interface == QStringLiteral("xdg_shell")
-               && qEnvironmentVariableIsSet("QT_WAYLAND_USE_XDG_SHELL")) {
-        mShellXdg.reset(new QWaylandXdgShell(registry,id));
-    } else if (interface == QStringLiteral("wl_shell")){
-        mShell.reset(new QtWayland::wl_shell(registry, id, 1));
     } else if (interface == QStringLiteral("wl_seat")) {
         QWaylandInputDevice *inputDevice = mWaylandIntegration->createInputDevice(this, version, id);
         mInputDevices.append(inputDevice);
+#ifndef QT_NO_DRAGANDDROP
     } else if (interface == QStringLiteral("wl_data_device_manager")) {
         mDndSelectionHandler.reset(new QWaylandDataDeviceManager(this, id));
-    } else if (interface == QStringLiteral("qt_output_extension")) {
-        mOutputExtension.reset(new QtWayland::qt_output_extension(registry, id, 1));
-        foreach (QPlatformScreen *screen, screens())
-            static_cast<QWaylandScreen *>(screen)->createExtendedOutput();
+#endif
     } else if (interface == QStringLiteral("qt_surface_extension")) {
         mWindowExtension.reset(new QtWayland::qt_surface_extension(registry, id, 1));
-    } else if (interface == QStringLiteral("qt_sub_surface_extension")) {
-        mSubSurfaceExtension.reset(new QtWayland::qt_sub_surface_extension(registry, id, 1));
+    } else if (interface == QStringLiteral("wl_subcompositor")) {
+        mSubCompositor.reset(new QtWayland::wl_subcompositor(registry, id, 1));
     } else if (interface == QStringLiteral("qt_touch_extension")) {
         mTouchExtension.reset(new QWaylandTouchExtension(this, id));
     } else if (interface == QStringLiteral("qt_key_extension")) {
@@ -298,8 +282,8 @@ void QWaylandDisplay::registry_global_remove(uint32_t id)
             if (global.interface == QStringLiteral("wl_output")) {
                 foreach (QWaylandScreen *screen, mScreens) {
                     if (screen->outputId() == id) {
-                        delete screen;
                         mScreens.removeOne(screen);
+                        mWaylandIntegration->destroyScreen(screen);
                         break;
                     }
                 }
@@ -308,6 +292,15 @@ void QWaylandDisplay::registry_global_remove(uint32_t id)
             break;
         }
     }
+}
+
+bool QWaylandDisplay::hasRegistryGlobal(const QString &interfaceName)
+{
+    Q_FOREACH (const RegistryGlobal &global, mGlobals)
+        if (global.interface == interfaceName)
+            return true;
+
+    return false;
 }
 
 void QWaylandDisplay::addRegistryListener(RegistryListener listener, void *data)
@@ -369,11 +362,6 @@ void QWaylandDisplay::forceRoundTrip()
     }
 }
 
-QtWayland::xdg_shell *QWaylandDisplay::shellXdg()
-{
-    return mShellXdg.data();
-}
-
 bool QWaylandDisplay::supportsWindowDecoration() const
 {
     static bool disabled = qgetenv("QT_WAYLAND_DISABLE_WINDOWDECORATION").toInt();
@@ -386,11 +374,88 @@ bool QWaylandDisplay::supportsWindowDecoration() const
     return integrationSupport;
 }
 
+QWaylandWindow *QWaylandDisplay::lastInputWindow() const
+{
+    return mLastInputWindow.data();
+}
+
 void QWaylandDisplay::setLastInputDevice(QWaylandInputDevice *device, uint32_t serial, QWaylandWindow *win)
 {
     mLastInputDevice = device;
     mLastInputSerial = serial;
     mLastInputWindow = win;
+}
+
+void QWaylandDisplay::handleWindowActivated(QWaylandWindow *window)
+{
+    if (mActiveWindows.contains(window))
+        return;
+
+    mActiveWindows.append(window);
+    requestWaylandSync();
+}
+
+void QWaylandDisplay::handleWindowDeactivated(QWaylandWindow *window)
+{
+    Q_ASSERT(!mActiveWindows.empty());
+
+    if (mActiveWindows.last() == window)
+        requestWaylandSync();
+
+    mActiveWindows.removeOne(window);
+}
+
+void QWaylandDisplay::handleKeyboardFocusChanged(QWaylandInputDevice *inputDevice)
+{
+    QWaylandWindow *keyboardFocus = inputDevice->keyboardFocus();
+
+    if (mLastKeyboardFocus == keyboardFocus)
+        return;
+
+    if (keyboardFocus && !keyboardFocus->shellManagesActiveState())
+        handleWindowActivated(keyboardFocus);
+
+    if (mLastKeyboardFocus && !mLastKeyboardFocus->shellManagesActiveState())
+        handleWindowDeactivated(mLastKeyboardFocus);
+
+    mLastKeyboardFocus = keyboardFocus;
+}
+
+void QWaylandDisplay::handleWindowDestroyed(QWaylandWindow *window)
+{
+    if (mActiveWindows.contains(window))
+        handleWindowDeactivated(window);
+}
+
+void QWaylandDisplay::handleWaylandSync()
+{
+    // This callback is used to set the window activation because we may get an activate/deactivate
+    // pair, and the latter one would be lost in the QWindowSystemInterface queue, if we issue the
+    // handleWindowActivated() calls immediately.
+    QWindow *activeWindow = mActiveWindows.empty() ? Q_NULLPTR : mActiveWindows.last()->window();
+    if (activeWindow != QGuiApplication::focusWindow())
+        QWindowSystemInterface::handleWindowActivated(activeWindow);
+}
+
+const wl_callback_listener QWaylandDisplay::syncCallbackListener = {
+    [](void *data, struct wl_callback *callback, uint32_t time){
+        Q_UNUSED(time);
+        wl_callback_destroy(callback);
+        QWaylandDisplay *display = static_cast<QWaylandDisplay *>(data);
+        display->mSyncCallback = Q_NULLPTR;
+        display->handleWaylandSync();
+    }
+};
+
+void QWaylandDisplay::requestWaylandSync()
+{
+    if (mSyncCallback)
+        return;
+
+    mSyncCallback = wl_display_sync(mDisplay);
+    wl_callback_add_listener(mSyncCallback, &syncCallbackListener, this);
+}
+
 }
 
 QT_END_NAMESPACE

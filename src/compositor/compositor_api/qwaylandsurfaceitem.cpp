@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -111,10 +111,11 @@ QWaylandSurfaceItem::QWaylandSurfaceItem(QWaylandQuickSurface *surface, QQuickIt
         connect(surface, &QWaylandSurface::sizeChanged, this, &QWaylandSurfaceItem::updateSize);
         connect(surface, &QWaylandSurface::configure, this, &QWaylandSurfaceItem::updateBuffer);
         connect(surface, &QWaylandSurface::redraw, this, &QQuickItem::update);
+
+        connect(this, &QQuickItem::windowChanged, surface, &QWaylandQuickSurface::bindWindow);
     }
     connect(this, &QWaylandSurfaceItem::widthChanged, this, &QWaylandSurfaceItem::updateSurfaceSize);
     connect(this, &QWaylandSurfaceItem::heightChanged, this, &QWaylandSurfaceItem::updateSurfaceSize);
-
 
     m_yInverted = surface ? surface->isYInverted() : true;
     emit yInvertedChanged();
@@ -174,6 +175,10 @@ void QWaylandSurfaceItem::mouseReleaseEvent(QMouseEvent *event)
 void QWaylandSurfaceItem::hoverEnterEvent(QHoverEvent *event)
 {
     if (surface()) {
+        if (!surface()->inputRegionContains(event->pos())) {
+            event->ignore();
+            return;
+        }
         QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
         inputDevice->sendMouseMoveEvent(this, event->pos());
     }
@@ -182,14 +187,10 @@ void QWaylandSurfaceItem::hoverEnterEvent(QHoverEvent *event)
 void QWaylandSurfaceItem::hoverMoveEvent(QHoverEvent *event)
 {
     if (surface()) {
-        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
-        inputDevice->sendMouseMoveEvent(this, event->pos());
-    }
-}
-
-void QWaylandSurfaceItem::hoverLeaveEvent(QHoverEvent *event)
-{
-    if (surface()) {
+        if (!surface()->inputRegionContains(event->pos())) {
+            event->ignore();
+            return;
+        }
         QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
         inputDevice->sendMouseMoveEvent(this, event->pos());
     }
@@ -227,13 +228,13 @@ void QWaylandSurfaceItem::keyReleaseEvent(QKeyEvent *event)
 void QWaylandSurfaceItem::touchEvent(QTouchEvent *event)
 {
     if (m_touchEventsEnabled) {
+        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
+
         if (event->type() == QEvent::TouchBegin) {
             QQuickItem *grabber = window()->mouseGrabberItem();
             if (grabber != this)
                 grabMouse();
         }
-
-        QWaylandInputDevice *inputDevice = compositor()->inputDeviceFor(event);
 
         QPoint pointPos;
         const QList<QTouchEvent::TouchPoint> &points = event->touchPoints();
@@ -250,6 +251,10 @@ void QWaylandSurfaceItem::touchEvent(QTouchEvent *event)
             inputDevice->setMouseFocus(this, pointPos, pointPos);
         }
         inputDevice->sendFullTouchEvent(event);
+
+        const bool isEnd = event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel;
+        if (isEnd && window()->mouseGrabberItem() == this)
+            ungrabMouse();
     } else {
         event->ignore();
     }
@@ -356,6 +361,13 @@ void QWaylandSurfaceItem::updateBuffer(bool hasBuffer)
 
 void QWaylandSurfaceItem::updateTexture()
 {
+    updateTexture(false);
+}
+
+void QWaylandSurfaceItem::updateTexture(bool changed)
+{
+    Q_UNUSED(changed);
+
     if (!m_provider)
         m_provider = new QWaylandSurfaceTextureProvider();
 
@@ -374,7 +386,7 @@ QSGNode *QWaylandSurfaceItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeD
 {
     bool mapped = surface() && surface()->isMapped();
 
-    if (!mapped || !m_provider->t || !m_paintEnabled) {
+    if (!mapped || !m_provider || !m_provider->t || !m_paintEnabled) {
         delete oldNode;
         return 0;
     }
@@ -385,7 +397,7 @@ QSGNode *QWaylandSurfaceItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeD
         node = new QSGSimpleTextureNode();
         node->setFiltering(smooth() ? QSGTexture::Linear : QSGTexture::Nearest);
     }
-    node->setTexture(m_provider->texture());
+    node->setTexture(m_provider->t);
     // Surface textures come by default with the OpenGL coordinate system, which is inverted relative
     // to the QtQuick one. So we're dealing with a double invertion here, and if isYInverted() returns
     // true it means it is NOT inverted relative to QtQuick, while if it returns false it means it IS.

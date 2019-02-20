@@ -1,4 +1,5 @@
 TARGET = QtWaylandClient
+MODULE = waylandclient
 
 QT += core-private gui-private
 
@@ -11,16 +12,14 @@ equals(QT_MAJOR_VERSION,5) {
         QT += fontdatabase_support-private
         QT += eventdispatcher_support-private
         QT += theme_support-private
+        QT_FOR_PRIVATE += service_support-private
     }
 }
 
-MODULE=waylandclient
-MODULE_PLUGIN_TYPES = wayland-graphics-integration-client wayland-decoration-client wayland-inputdevice-integration
-
-load(qt_module)
+# We have a bunch of C code with casts, so we can't have this option
+QMAKE_CXXFLAGS_WARN_ON -= -Wcast-qual
 
 CONFIG -= precompile_header
-CONFIG -= create_cmake
 CONFIG += link_pkgconfig qpa/genericunixfontdatabase wayland-scanner
 
 !equals(QT_WAYLAND_GL_CONFIG, nogl) {
@@ -29,9 +28,9 @@ CONFIG += link_pkgconfig qpa/genericunixfontdatabase wayland-scanner
 
 config_xkbcommon {
     !contains(QT_CONFIG, no-pkg-config) {
-        PKGCONFIG += xkbcommon
+        PKGCONFIG_PRIVATE += xkbcommon
     } else {
-        LIBS += -lxkbcommon
+        LIBS_PRIVATE += -lxkbcommon
     }
 } else {
     DEFINES += QT_NO_WAYLAND_XKB
@@ -39,7 +38,7 @@ config_xkbcommon {
 
 !contains(QT_CONFIG, no-pkg-config) {
     PKGCONFIG += wayland-client wayland-cursor
-    contains(QT_CONFIG, glib): PKGCONFIG_PRIVATE += glib-2.0
+    contains(QT_CONFIG, glib): PKGCONFIG += glib-2.0
 } else {
     LIBS += -lwayland-client -lwayland-cursor $$QT_LIBS_GLIB
 }
@@ -50,7 +49,6 @@ WAYLANDCLIENTSOURCES += \
             ../3rdparty/protocol/wayland.xml \
             ../extensions/surface-extension.xml \
             ../extensions/sub-surface-extension.xml \
-            ../extensions/output-extension.xml \
             ../extensions/touch-extension.xml \
             ../extensions/qtkey-extension.xml \
             ../extensions/windowmanager.xml \
@@ -73,20 +71,24 @@ SOURCES +=  qwaylandintegration.cpp \
             qwaylanddatasource.cpp \
             qwaylandshellsurface.cpp \
             qwaylandwlshellsurface.cpp \
+            qwaylandwlshellintegration.cpp \
             qwaylandxdgshell.cpp \
             qwaylandxdgsurface.cpp \
-            qwaylandextendedoutput.cpp \
+            qwaylandxdgpopup_p.cpp \
+            qwaylandxdgshellintegration.cpp \
             qwaylandextendedsurface.cpp \
             qwaylandsubsurface.cpp \
             qwaylandtouch.cpp \
             qwaylandqtkey.cpp \
             ../shared/qwaylandmimehelper.cpp \
+            ../shared/qwaylandxkb.cpp \
             qwaylandabstractdecoration.cpp \
             qwaylanddecorationfactory.cpp \
             qwaylanddecorationplugin.cpp \
             qwaylandwindowmanagerintegration.cpp \
             qwaylandinputcontext.cpp \
-            qwaylanddatadevice.cpp
+            qwaylanddatadevice.cpp \
+            qwaylandbuffer.cpp
 
 HEADERS +=  qwaylandintegration_p.h \
             qwaylandnativeinterface_p.h \
@@ -105,14 +107,17 @@ HEADERS +=  qwaylandintegration_p.h \
             qwaylanddatasource_p.h \
             qwaylandshellsurface_p.h \
             qwaylandwlshellsurface_p.h \
+            qwaylandwlshellintegration_p.h \
             qwaylandxdgshell_p.h \
             qwaylandxdgsurface_p.h \
-            qwaylandextendedoutput_p.h \
+            qwaylandxdgpopup_p.h \
+            qwaylandxdgshellintegration_p.h \
             qwaylandextendedsurface_p.h \
             qwaylandsubsurface_p.h \
             qwaylandtouch_p.h \
             qwaylandqtkey_p.h \
             ../shared/qwaylandmimehelper.h \
+            ../shared/qwaylandxkb.h \
             qwaylandabstractdecoration_p.h \
             qwaylanddecorationfactory_p.h \
             qwaylanddecorationplugin_p.h \
@@ -139,3 +144,10 @@ include(../hardwareintegration/client/wayland-egl/wayland-egl.pri)
 include(hardwareintegration/hardwareintegration.pri)
 include(shellintegration/shellintegration.pri)
 include(inputdeviceintegration/inputdeviceintegration.pri)
+
+CONFIG += generated_privates
+MODULE_PLUGIN_TYPES = \
+            wayland-graphics-integration-client \
+            wayland-inputdevice-integration \
+            wayland-decoration-client
+load(qt_module)

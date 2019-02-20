@@ -1,10 +1,11 @@
+requires(linux:!android)
+
 load(configure)
 qtCompileTest(wayland)
 qtCompileTest(xkbcommon)
 qtCompileTest(wayland_cursor)
 qtCompileTest(wayland_scanner)
 qtCompileTest(wayland_egl)
-qtCompileTest(egl)
 qtCompileTest(brcm_egl)
 qtCompileTest(glx)
 qtCompileTest(xcomposite)
@@ -14,7 +15,7 @@ qtCompileTest(libhybris_egl_server)
 load(qt_parts)
 
 !config_wayland {
-    warning("QtWayland requires Wayland 1.2.0 or higher, QtWayland will not be built")
+    warning("QtWayland requires Wayland 1.4.0 or higher, QtWayland will not be built")
     SUBDIRS =
 }
 

@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2014 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
@@ -17,8 +18,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -54,6 +55,7 @@
 #include <QQuickView>
 
 #include "qwayland-server-share-buffer.h"
+#include <QtCompositor/qwaylandoutput.h>
 #include <QtCompositor/private/qwlcompositor_p.h>
 #include <QtCompositor/private/qwlserverbufferintegration_p.h>
 
@@ -70,7 +72,7 @@ class QmlCompositor
 
 public:
     QmlCompositor()
-        : QWaylandQuickCompositor(this, 0, DefaultExtensions | SubSurfaceExtension)
+        : QWaylandQuickCompositor(0, DefaultExtensions | SubSurfaceExtension)
         , QtWaylandServer::qt_share_buffer(QWaylandCompositor::handle()->wl_display(), 1)
         , m_server_buffer_32_bit(0)
         , m_server_buffer_item_32_bit(0)
@@ -82,6 +84,7 @@ public:
         setColor(Qt::black);
         create();
         grabWindow();
+        createOutput(this, "", "");
         addDefaultShell();
 
         connect(this, SIGNAL(afterRendering()), this, SLOT(sendCallbacks()));

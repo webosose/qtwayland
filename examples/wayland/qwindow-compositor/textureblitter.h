@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -51,7 +51,7 @@ class TextureBlitter
 public:
     TextureBlitter();
     ~TextureBlitter();
-    void bind();
+    void bind(quint32 target);
     void release();
     void drawTexture(int textureId, const QRectF &sourceGeometry,
                      const QSize &targetRect, int depth,
@@ -59,11 +59,15 @@ public:
 
 private:
     QOpenGLShaderProgram *m_shaderProgram;
+    QOpenGLShaderProgram *m_shaderProgramExternal;
+    QOpenGLShaderProgram *m_currentProgram;
     QMatrix4x4 m_transformMatrix;
 
     int m_matrixLocation;
     int m_vertexCoordEntry;
     int m_textureCoordEntry;
+
+    quint32 m_currentTarget;
 };
 
 QT_END_NAMESPACE

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the Qt Compositor.
 **
@@ -17,8 +17,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -48,6 +48,7 @@
 #include "qwlsubsurface_p.h"
 #include "qwlsurfacebuffer_p.h"
 #include "qwaylandsurfaceview.h"
+#include "qwaylandoutput.h"
 
 #include <QtCore/QDebug>
 #include <QTouchEvent>
@@ -113,6 +114,7 @@ Surface::Surface(struct wl_client *client, uint32_t id, int version, QWaylandCom
     : QtWaylandServer::wl_surface(client, id, version)
     , m_compositor(compositor->handle())
     , m_waylandSurface(surface)
+    , m_mainOutput(0)
     , m_buffer(0)
     , m_surfaceMapped(false)
     , m_attacher(0)
@@ -127,6 +129,8 @@ Surface::Surface(struct wl_client *client, uint32_t id, int version, QWaylandCom
     , m_destroyed(false)
     , m_contentOrientation(Qt::PrimaryOrientation)
     , m_visibility(QWindow::Hidden)
+    , m_role(0)
+    , m_roleHandler(0)
 {
     m_pending.buffer = 0;
     m_pending.newlyAttached = false;
@@ -146,6 +150,17 @@ Surface::~Surface()
         c->destroy();
     foreach (FrameCallback *c, m_frameCallbacks)
         c->destroy();
+}
+
+bool Surface::setRole(const SurfaceRole *role, wl_resource *errorResource, uint32_t errorCode)
+{
+    if (m_role && m_role != role) {
+        wl_resource_post_error(errorResource, errorCode, "Cannot assign role %s to wl_surface@%d, already has role %s\n", role->name,
+                               wl_resource_get_id(resource()->handle), m_role->name);
+        return false;
+    }
+    m_role = role;
+    return true;
 }
 
 void Surface::setTransientOffset(qreal x, qreal y)
@@ -276,6 +291,68 @@ Compositor *Surface::compositor() const
     return m_compositor;
 }
 
+Output *Surface::mainOutput() const
+{
+    if (!m_mainOutput)
+        return m_compositor->primaryOutput()->handle();
+    return m_mainOutput;
+}
+
+void Surface::setMainOutput(Output *output)
+{
+    m_mainOutput = output;
+}
+
+QList<Output *> Surface::outputs() const
+{
+    return m_outputs;
+}
+
+void Surface::addToOutput(Output *output)
+{
+    if (!output)
+        return;
+
+    if (!m_mainOutput)
+        m_mainOutput = output;
+
+    if (m_outputs.contains(output))
+        return;
+
+    m_outputs.append(output);
+
+    QWaylandSurfaceEnterEvent event(output->waylandOutput());
+    QCoreApplication::sendEvent(waylandSurface(), &event);
+
+    // Send surface enter event
+    Q_FOREACH (Resource *resource, resourceMap().values()) {
+        QList<Output::Resource *> outputs = output->resourceMap().values();
+        for (int i = 0; i < outputs.size(); i++)
+            send_enter(resource->handle, outputs.at(i)->handle);
+    }
+}
+
+void Surface::removeFromOutput(Output *output)
+{
+    if (!output)
+        return;
+
+    m_outputs.removeOne(output);
+
+    if (m_outputs.size() == 0)
+        m_mainOutput = m_compositor->primaryOutput()->handle();
+
+    QWaylandSurfaceLeaveEvent event(output->waylandOutput());
+    QCoreApplication::sendEvent(waylandSurface(), &event);
+
+    // Send surface leave event
+    Q_FOREACH (Resource *resource, resourceMap().values()) {
+        QList<Output::Resource *> outputs = output->resourceMap().values();
+        for (int i = 0; i < outputs.size(); i++)
+            send_leave(resource->handle, outputs.at(i)->handle);
+    }
+}
+
 /*!
  * Sets the backbuffer for this surface. The back buffer is not yet on
  * screen and will become live during the next swapBuffers().
@@ -359,6 +436,14 @@ void Surface::surface_destroy_resource(Resource *)
         m_extendedSurface = 0;
     }
 
+    if (transientParent()) {
+        foreach (Surface *surface, compositor()->surfaces()) {
+            if (surface->transientParent() == this) {
+                surface->setTransientParent(0);
+            }
+        }
+    }
+
     m_destroyed = true;
     m_waylandSurface->destroy();
     emit m_waylandSurface->surfaceDestroyed();
@@ -420,6 +505,8 @@ void Surface::surface_commit(Resource *)
             }
         }
         emit m_waylandSurface->configure(m_bufferRef);
+        if (m_roleHandler)
+            m_roleHandler->configure(m_pending.offset.x(), m_pending.offset.y());
     }
 
     m_pending.buffer = 0;
