@@ -125,7 +125,9 @@ QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
     , mLastInputDevice(0)
     , mLastInputWindow(0)
     , mLastKeyboardFocus(Q_NULLPTR)
+#ifdef NO_WEBOS_PLATFORM
     , mSyncCallback(Q_NULLPTR)
+#endif
 {
     qRegisterMetaType<uint32_t>("uint32_t");
 
@@ -437,6 +439,7 @@ void QWaylandDisplay::handleWaylandSync()
         QWindowSystemInterface::handleWindowActivated(activeWindow);
 }
 
+#ifdef NO_WEBOS_PLATFORM
 const wl_callback_listener QWaylandDisplay::syncCallbackListener = {
     [](void *data, struct wl_callback *callback, uint32_t time){
         Q_UNUSED(time);
@@ -446,14 +449,19 @@ const wl_callback_listener QWaylandDisplay::syncCallbackListener = {
         display->handleWaylandSync();
     }
 };
+#endif
 
 void QWaylandDisplay::requestWaylandSync()
 {
+#ifdef NO_WEBOS_PLATFORM
     if (mSyncCallback)
         return;
 
     mSyncCallback = wl_display_sync(mDisplay);
     wl_callback_add_listener(mSyncCallback, &syncCallbackListener, this);
+#else
+    handleWaylandSync();
+#endif
 }
 
 }
