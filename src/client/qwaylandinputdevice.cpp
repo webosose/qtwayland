@@ -930,6 +930,20 @@ void QWaylandInputDevice::Keyboard::keyboard_key(uint32_t serial, uint32_t time,
 
     if (isDown)
         mParent->mQDisplay->setLastInputDevice(mParent, serial, window);
+#ifndef NO_WEBOS_PLATFORM
+    // Due to the asynchronous window activation by the upstream commit f497a5b,
+    // the window may not yet be activated at the time when the very first key
+    // event arrives.
+    // The window activation is triggered by a wl_keyboard::enter event from
+    // the compositor and we can assumed that a key event is always sent to a
+    // surface focused. Thus there is no issue with activating window earlier
+    // than the enter event is processed completely.
+    // Note that the activation done here does not affect to active window
+    // handling in QWaylandDisplay.
+    if (!window->window()->isActive())
+        QWindowSystemInterface::handleWindowActivated(window->window());
+#endif
+
 #if QT_CONFIG(xkbcommon)
     if (!loadKeyMap()) {
         return;
