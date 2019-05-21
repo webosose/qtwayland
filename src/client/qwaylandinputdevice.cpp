@@ -80,6 +80,103 @@ QT_BEGIN_NAMESPACE
 
 namespace QtWaylandClient {
 
+#if QT_CONFIG(xkbcommon)
+
+#include <QFile>
+#include <QHash>
+
+
+class XKBKeymap
+{
+public:
+    XKBKeymap();
+    ~XKBKeymap();
+
+    static XKBKeymap *instance()
+    {
+        static XKBKeymap *s = NULL;
+        if (!s)
+            s = new XKBKeymap;
+        return s;
+    }
+
+
+    xkb_context *context() { return m_context; }
+    xkb_keymap *map(int fd, size_t size);
+
+private:
+    xkb_context *m_context;
+    QHash<QString, xkb_keymap*> m_maps;
+
+    xkb_keymap *create(int fd, size_t size);
+};
+
+XKBKeymap::XKBKeymap()
+{
+    m_context = xkb_context_new(static_cast<xkb_context_flags>(0));
+}
+
+XKBKeymap::~XKBKeymap()
+{
+    QHash<QString, xkb_keymap*>::const_iterator i = m_maps.constBegin();
+    while (i != m_maps.constEnd()) {
+        xkb_keymap *map = i.value();
+        if (map)
+            xkb_keymap_unref(map);
+    }
+    if (m_context)
+        xkb_context_unref(m_context);
+}
+
+xkb_keymap* XKBKeymap::map(int fd, size_t size)
+{
+    QFile source(QString("/proc/self/fd/%1").arg(fd));
+    QString mapFile = source.symLinkTarget();
+
+    xkb_keymap *keymap = NULL;
+
+    if (!mapFile.isEmpty()) {
+        keymap = m_maps.value(mapFile);
+        if (keymap) {
+            qDebug() << "Found XKB keymap for" << mapFile << "fd:" << fd << "size:" << size;
+            return keymap;
+        }
+    }
+
+    keymap = create(fd, size);
+    if (!keymap) {
+        qWarning() << "Failed to create XKB keymap, fd:" << fd << "size:" << size;
+        return NULL;
+    }
+
+    if (mapFile.isEmpty()) {
+        qDebug() << "XKB keymap created anonymously, fd:" << fd << "size:" << size;
+    } else {
+        qDebug() << "XKB keymap created fd:" << fd << "size:" << size << "mapped:" << mapFile;
+        m_maps.insert(mapFile, keymap);
+    }
+
+    return keymap;
+}
+
+xkb_keymap* XKBKeymap::create(int fd, size_t size)
+{
+    xkb_keymap *keymap = NULL;
+
+    if (m_context && fd >= 0 && size > 0) {
+        char *mapStr = (char *) mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+        if (mapStr != MAP_FAILED) {
+            keymap = xkb_keymap_new_from_string(m_context, mapStr, XKB_KEYMAP_FORMAT_TEXT_V1, (xkb_keymap_compile_flags)0);
+            munmap(mapStr, size);
+        }
+        close(fd);
+
+    }
+
+    return keymap;
+}
+#endif
+
 QWaylandInputDevice::Keyboard::Keyboard(QWaylandInputDevice *p)
     : mParent(p)
     , mFocus(0)
@@ -87,12 +184,16 @@ QWaylandInputDevice::Keyboard::Keyboard(QWaylandInputDevice *p)
     , mXkbContext(0)
     , mXkbMap(0)
     , mXkbState(0)
-    , mKeymapFd(0)
+    , mXkbMapShared(false)
+    , mKeymapFd(-1)
     , mKeymapSize(0)
     , mPendingKeymap(false)
 #endif
     , mNativeModifiers(0)
 {
+#if QT_CONFIG(xkbcommon)
+    mXkbContext = XKBKeymap::instance()->context();
+#endif
     connect(&mRepeatTimer, SIGNAL(timeout()), this, SLOT(repeatKey()));
 }
 
@@ -106,23 +207,38 @@ bool QWaylandInputDevice::Keyboard::createDefaultKeyMap()
     names.variant = strdup("");
     names.options = strdup("");
 
-    mXkbContext = xkb_context_new(xkb_context_flags(0));
     if (mXkbContext) {
-        mXkbMap = xkb_map_new_from_names(mXkbContext, &names, xkb_map_compile_flags(0));
-        if (mXkbMap) {
-            mXkbState = xkb_state_new(mXkbMap);
+        xkb_keymap *map = xkb_keymap_new_from_names(mXkbContext, &names, xkb_keymap_compile_flags(0));
+        xkb_state *state = NULL;
+        if (map) {
+            state = xkb_state_new(map);
+            if (state) {
+                mXkbState = state;
+                mXkbMap = map;
+                mXkbMapShared = false;
+                qDebug() << "Created default XKB keymap:" << this
+                    << "layout:" << names.layout
+                    << "variant:" << names.variant
+                    << "options:" << names.options
+                    << "model:" << names.model
+                    << "rules:" << names.rules;
+            }
         }
     }
 
+    free((char *)names.rules);
+    free((char *)names.model);
+    free((char *)names.layout);
+    free((char *)names.variant);
+    free((char *)names.options);
+
     if (!mXkbContext || !mXkbMap || !mXkbState) {
-        qWarning() << "xkb_map_new_from_names failed, no key input";
+        qWarning() << "Failed to create default XKB keymap," << this;
         releaseKeyMap();
         return false;
     }
 
     createComposeState();
-
-    mPendingKeymap = false;
 
     return true;
 }
@@ -131,10 +247,10 @@ void QWaylandInputDevice::Keyboard::releaseKeyMap()
 {
     if (mXkbState)
         xkb_state_unref(mXkbState);
-    if (mXkbMap)
-        xkb_map_unref(mXkbMap);
-    if (mXkbContext)
-        xkb_context_unref(mXkbContext);
+    mXkbState = NULL;
+    if (mXkbMap && !mXkbMapShared)
+        xkb_keymap_unref(mXkbMap);
+    mXkbMap = NULL;
 }
 
 void QWaylandInputDevice::Keyboard::createComposeState()
@@ -677,9 +793,16 @@ void QWaylandInputDevice::Keyboard::keyboard_keymap(uint32_t format, int32_t fd,
         return;
     }
 
+    qInfo() << "Received XKB keymap," << this << "fd:" << fd << "size:" << size;
+
+    if (mXkbState) {
+        xkb_state_unref(mXkbState);
+        mXkbState = NULL;
+    }
     mKeymapFd = fd;
     mKeymapSize = size;
     mPendingKeymap = true;
+
 #else
     Q_UNUSED(format);
     Q_UNUSED(fd);
@@ -691,43 +814,35 @@ void QWaylandInputDevice::Keyboard::keyboard_keymap(uint32_t format, int32_t fd,
 bool QWaylandInputDevice::Keyboard::loadKeyMap()
 {
     PMTRACE_QTWLCLI_FUNCTION;
-    if (!mPendingKeymap && mXkbContext && mXkbMap && mXkbState) {
-        return true;
-    }
 
-    char *map_str = (char *)mmap(NULL, mKeymapSize, PROT_READ, MAP_SHARED, mKeymapFd, 0);
+    if (!mPendingKeymap && mXkbState)
+        return true; // already loaded
 
-    if (map_str == MAP_FAILED) {
-        close(mKeymapFd);
-        return false;
-    }
+    mPendingKeymap = false;
 
-    // Release the old keymap resources in the case they were already created in
-    // the key event or when the compositor issues a new map
-    releaseComposeState();
+    // Release old keymap if any
     releaseKeyMap();
 
-    mXkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    if (mXkbContext) {
-        mXkbMap = xkb_map_new_from_string(mXkbContext, map_str, XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
-        if (mXkbMap) {
-            mXkbState = xkb_state_new(mXkbMap);
+    XKBKeymap *keymap = XKBKeymap::instance();
+
+    xkb_keymap *map = keymap->map(mKeymapFd, mKeymapSize);
+    xkb_state *state = NULL;
+    if (map) {
+        state = xkb_state_new(map);
+        if (state) {
+            mXkbState = state;
+            mXkbMap = map;
+            mXkbMapShared = true;
+            qInfo() << "Using shared XKB keymap," << this << "fd:" << mKeymapFd << "size:" << mKeymapSize;
+            return true;
         }
         createComposeState();
     }
-    munmap(map_str, mKeymapSize);
-    close(mKeymapFd);
 
-    if (!mXkbContext || !mXkbMap || !mXkbState) {
-        qInfo() << "Load default keymap()";
-        if (!createDefaultKeyMap()) {
-            qWarning() << "Load keymap failed, no key input";
-            releaseKeyMap();
-            return false;
-        }
-    } else {
-        mPendingKeymap = false;
-        return true;
+    if (!createDefaultKeyMap()) {
+        qWarning() << "Load XKB keymap failed, no key input," << this;
+        releaseKeyMap();
+        return false;
     }
     return true;
 }

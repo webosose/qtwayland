@@ -215,6 +215,7 @@ public:
     xkb_state *mXkbState = nullptr;
     xkb_compose_table *mXkbComposeTable = nullptr;
     xkb_compose_state *mXkbComposeState = nullptr;
+    bool mXkbMapShared;
 #endif
     uint32_t mNativeModifiers = 0;
 
