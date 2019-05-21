@@ -103,11 +103,16 @@ void QWaylandEglWindow::setGeometry(const QRect &rect)
     updateSurface(false);
 }
 
+qreal QWaylandEglWindow::devicePixelRatio() const
+{
+    return screen()->devicePixelRatio();
+}
+
 void QWaylandEglWindow::updateSurface(bool create)
 {
     QMargins margins = frameMargins();
     QRect rect = geometry();
-    QSize sizeWithMargins = (rect.size() + QSize(margins.left() + margins.right(), margins.top() + margins.bottom())) * scale();
+    QSize sizeWithMargins = (rect.size()*devicePixelRatio() + QSize(margins.left() + margins.right(), margins.top() + margins.bottom())) * scale();
 
     // wl_egl_windows must have both width and height > 0
     // mesa's egl returns NULL if we try to create a, invalid wl_egl_window, however not all EGL
@@ -198,7 +203,7 @@ GLuint QWaylandEglWindow::contentFBO() const
 
     if (m_resize || !m_contentFBO) {
         QOpenGLFramebufferObject *old = m_contentFBO;
-        QSize fboSize = geometry().size() * scale();
+        QSize fboSize = geometry().size() * devicePixelRatio() * scale();
         m_contentFBO = new QOpenGLFramebufferObject(fboSize.width(), fboSize.height(), QOpenGLFramebufferObject::CombinedDepthStencil);
 
         delete old;

@@ -77,6 +77,8 @@ public:
     void invalidateSurface() override;
     void setVisible(bool visible) override;
 
+    qreal devicePixelRatio() const;
+
 private:
     QWaylandEglClientBufferIntegration *m_clientBufferIntegration = nullptr;
     struct wl_egl_window *m_waylandEglWindow = nullptr;
