@@ -80,6 +80,16 @@ namespace QtWaylandClient {
 
 QWaylandInputDevice::Keyboard::Keyboard(QWaylandInputDevice *p)
     : mParent(p)
+    , mFocus(0)
+#if QT_CONFIG(xkbcommon)
+    , mXkbContext(0)
+    , mXkbMap(0)
+    , mXkbState(0)
+    , mKeymapFd(0)
+    , mKeymapSize(0)
+    , mPendingKeymap(false)
+#endif
+    , mNativeModifiers(0)
 {
     connect(&mRepeatTimer, SIGNAL(timeout()), this, SLOT(repeatKey()));
 }
@@ -87,10 +97,6 @@ QWaylandInputDevice::Keyboard::Keyboard(QWaylandInputDevice *p)
 #if QT_CONFIG(xkbcommon)
 bool QWaylandInputDevice::Keyboard::createDefaultKeyMap()
 {
-    if (mXkbContext && mXkbMap && mXkbState) {
-        return true;
-    }
-
     xkb_rule_names names;
     names.rules = strdup("evdev");
     names.model = strdup("pc105");
@@ -110,7 +116,11 @@ bool QWaylandInputDevice::Keyboard::createDefaultKeyMap()
         qWarning() << "xkb_map_new_from_names failed, no key input";
         return false;
     }
+
     createComposeState();
+
+    mPendingKeymap = false;
+
     return true;
 }
 
@@ -636,10 +646,28 @@ void QWaylandInputDevice::Keyboard::keyboard_keymap(uint32_t format, int32_t fd,
         return;
     }
 
-    char *map_str = static_cast<char *>(mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0));
+    mKeymapFd = fd;
+    mKeymapSize = size;
+    mPendingKeymap = true;
+#else
+    Q_UNUSED(format);
+    Q_UNUSED(fd);
+    Q_UNUSED(size);
+#endif
+}
+
+#if QT_CONFIG(xkbcommon)
+bool QWaylandInputDevice::Keyboard::loadKeyMap()
+{
+    if (!mPendingKeymap && mXkbContext && mXkbMap && mXkbState) {
+        return true;
+    }
+
+    char *map_str = (char *)mmap(NULL, mKeymapSize, PROT_READ, MAP_SHARED, mKeymapFd, 0);
+
     if (map_str == MAP_FAILED) {
-        close(fd);
-        return;
+        close(mKeymapFd);
+        return false;
     }
 
     // Release the old keymap resources in the case they were already created in
@@ -647,20 +675,24 @@ void QWaylandInputDevice::Keyboard::keyboard_keymap(uint32_t format, int32_t fd,
     releaseComposeState();
     releaseKeyMap();
 
+
     mXkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     mXkbMap = xkb_map_new_from_string(mXkbContext, map_str, XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
-    munmap(map_str, size);
-    close(fd);
+    munmap(map_str, mKeymapSize);
+    close(mKeymapFd);
 
     mXkbState = xkb_state_new(mXkbMap);
     createComposeState();
 
-#else
-    Q_UNUSED(format);
-    Q_UNUSED(fd);
-    Q_UNUSED(size);
-#endif
+    if (!mXkbContext || !mXkbMap || !mXkbState) {
+        qWarning() << "Load default keymap()";
+        return createDefaultKeyMap();
+    } else {
+        mPendingKeymap = false;
+        return true;
+    }
 }
+#endif
 
 void QWaylandInputDevice::Keyboard::keyboard_enter(uint32_t time, struct wl_surface *surface, struct wl_array *keys)
 {
@@ -669,7 +701,6 @@ void QWaylandInputDevice::Keyboard::keyboard_enter(uint32_t time, struct wl_surf
 
     if (!surface)
         return;
-
 
     QWaylandWindow *window = QWaylandWindow::fromWlSurface(surface);
     mFocus = window;
@@ -732,9 +763,8 @@ void QWaylandInputDevice::Keyboard::keyboard_key(uint32_t serial, uint32_t time,
 
     if (isDown)
         mParent->mQDisplay->setLastInputDevice(mParent, serial, window);
-
 #if QT_CONFIG(xkbcommon)
-    if (!createDefaultKeyMap()) {
+    if (!loadKeyMap()) {
         return;
     }
 

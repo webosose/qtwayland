@@ -224,6 +224,9 @@ public:
     QString mRepeatText;
 #if QT_CONFIG(xkbcommon)
     xkb_keysym_t mRepeatSym;
+    int32_t  mKeymapFd;
+    uint32_t mKeymapSize;
+    bool mPendingKeymap;
 #endif
     QTimer mRepeatTimer;
 
@@ -235,6 +238,7 @@ private slots:
 private:
 #if QT_CONFIG(xkbcommon)
     bool createDefaultKeyMap();
+    bool loadKeyMap();
     void releaseKeyMap();
     void createComposeState();
     void releaseComposeState();
