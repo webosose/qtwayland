@@ -116,6 +116,7 @@ bool QWaylandInputDevice::Keyboard::createDefaultKeyMap()
 
     if (!mXkbContext || !mXkbMap || !mXkbState) {
         qWarning() << "xkb_map_new_from_names failed, no key input";
+        releaseKeyMap();
         return false;
     }
 
@@ -706,22 +707,29 @@ bool QWaylandInputDevice::Keyboard::loadKeyMap()
     releaseComposeState();
     releaseKeyMap();
 
-
     mXkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    mXkbMap = xkb_map_new_from_string(mXkbContext, map_str, XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    if (mXkbContext) {
+        mXkbMap = xkb_map_new_from_string(mXkbContext, map_str, XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
+        if (mXkbMap) {
+            mXkbState = xkb_state_new(mXkbMap);
+        }
+        createComposeState();
+    }
     munmap(map_str, mKeymapSize);
     close(mKeymapFd);
 
-    mXkbState = xkb_state_new(mXkbMap);
-    createComposeState();
-
     if (!mXkbContext || !mXkbMap || !mXkbState) {
         qWarning() << "Load default keymap()";
-        return createDefaultKeyMap();
+        if (!createDefaultKeyMap()) {
+            qWarning() << "Load keymap failed, no key input";
+            releaseKeyMap();
+            return false;
+        }
     } else {
         mPendingKeymap = false;
         return true;
     }
+    return true;
 }
 #endif
 
