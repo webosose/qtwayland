@@ -70,16 +70,17 @@ class QWaylandInputDevice;
 class Q_WAYLAND_CLIENT_EXPORT QWaylandIntegration : public QPlatformIntegration
 {
 public:
-    QWaylandIntegration();
+    QWaylandIntegration(bool useCustomIntegration = false);
     ~QWaylandIntegration() override;
 
     bool hasFailed() { return mFailed; }
-
     bool hasCapability(QPlatformIntegration::Capability cap) const override;
     QPlatformWindow *createPlatformWindow(QWindow *window) const override;
 #if QT_CONFIG(opengl)
     QPlatformOpenGLContext *createPlatformOpenGLContext(QOpenGLContext *context) const override;
 #endif
+    void initIntegration();
+
     QPlatformBackingStore *createPlatformBackingStore(QWindow *window) const override;
 
     QAbstractEventDispatcher *createEventDispatcher() const override;
@@ -110,19 +111,17 @@ public:
 
     QPlatformTheme *createPlatformTheme(const QString &name) const override;
 
-    QWaylandInputDevice *createInputDevice(QWaylandDisplay *display, int version, uint32_t id);
+    virtual QWaylandInputDevice *createInputDevice(QWaylandDisplay *display, int version, uint32_t id);
 
     virtual QWaylandClientBufferIntegration *clientBufferIntegration() const;
     virtual QWaylandServerBufferIntegration *serverBufferIntegration() const;
     virtual QWaylandShellIntegration *shellIntegration() const;
 
-private:
+protected:
     // NOTE: mDisplay *must* be destructed after mDrag and mClientBufferIntegration
     // and mShellIntegration.
     // Do not move this definition into the private section at the bottom.
     QScopedPointer<QWaylandDisplay> mDisplay;
-
-protected:
     QScopedPointer<QWaylandClientBufferIntegration> mClientBufferIntegration;
     QScopedPointer<QWaylandServerBufferIntegration> mServerBufferIntegration;
     QScopedPointer<QWaylandShellIntegration> mShellIntegration;
@@ -135,6 +134,7 @@ private:
     void initializeInputDeviceIntegration();
     QWaylandShellIntegration *createShellIntegration(const QString& interfaceName);
 
+protected:
     QScopedPointer<QPlatformFontDatabase> mFontDb;
 #if QT_CONFIG(clipboard)
     QScopedPointer<QPlatformClipboard> mClipboard;

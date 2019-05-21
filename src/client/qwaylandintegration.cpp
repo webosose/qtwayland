@@ -122,29 +122,52 @@ public:
     }
 };
 
-QWaylandIntegration::QWaylandIntegration()
+QWaylandIntegration::QWaylandIntegration(bool useCustomIntegration)
 #if defined(Q_OS_MACOS)
     : mFontDb(new QCoreTextFontDatabaseEngineFactory<QCoreTextFontEngine>)
 #else
     : mFontDb(new QGenericUnixFontDatabase())
 #endif
-    , mNativeInterface(new QWaylandNativeInterface(this))
+    , mClipboard(0)
+    , mDrag(0)
+    , mDisplay(0)
+    , mNativeInterface(0)
 #if QT_CONFIG(accessibility)
     , mAccessibility(new QPlatformAccessibility())
 #endif
 {
-    initializeInputDeviceIntegration();
-    mDisplay.reset(new QWaylandDisplay(this));
+    if (!useCustomIntegration)
+        initIntegration();
+}
+
+QWaylandIntegration::~QWaylandIntegration()
+{
+}
+
+void QWaylandIntegration::initIntegration()
+{
+    if (!mNativeInterface)
+        mNativeInterface.reset(new QWaylandNativeInterface(this));
+    if (!mInputDeviceIntegration)
+        initializeInputDeviceIntegration();
+
+    if (!mDisplay)
+        mDisplay.reset(new QWaylandDisplay(this));
+
     if (!mDisplay->isInitialized()) {
         mFailed = true;
         return;
     }
+
 #if QT_CONFIG(clipboard)
-    mClipboard.reset(new QWaylandClipboard(mDisplay.data()));
+    if (!mClipboard)
+        mClipboard.reset(new QWaylandClipboard(mDisplay.data()));
 #endif
 #if QT_CONFIG(draganddrop)
-    mDrag.reset(new QWaylandDrag(mDisplay.data()));
+    if (!mDrag)
+        mDrag.reset(new QWaylandDrag(mDisplay.data()));
 #endif
+
     QString icStr = QPlatformInputContextFactory::requested();
     if (!icStr.isNull()) {
         mInputContext.reset(QPlatformInputContextFactory::create(icStr));
@@ -159,10 +182,6 @@ QWaylandIntegration::QWaylandIntegration()
             mInputContext.reset(ctx);
         }
     }
-}
-
-QWaylandIntegration::~QWaylandIntegration()
-{
 }
 
 QPlatformNativeInterface * QWaylandIntegration::nativeInterface() const
