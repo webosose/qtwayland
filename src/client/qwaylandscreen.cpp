@@ -42,6 +42,7 @@
 #include "qwaylanddisplay_p.h"
 #include "qwaylandcursor_p.h"
 #include "qwaylandwindow_p.h"
+#include "qwaylandintegration_p.h"
 
 #include <QtGui/QGuiApplication>
 
@@ -185,7 +186,7 @@ QPlatformCursor *QWaylandScreen::cursor() const
 QWaylandCursor *QWaylandScreen::waylandCursor()
 {
     if (!mWaylandCursor)
-        mWaylandCursor.reset(new QWaylandCursor(this));
+        mWaylandCursor.reset(mWaylandDisplay->integration()->createPlatformCursor(this));
     return mWaylandCursor.data();
 }
 

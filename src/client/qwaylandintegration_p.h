@@ -66,6 +66,8 @@ class QWaylandServerBufferIntegration;
 class QWaylandShellIntegration;
 class QWaylandInputDeviceIntegration;
 class QWaylandInputDevice;
+class QWaylandScreen;
+class QWaylandCursor;
 
 class Q_WAYLAND_CLIENT_EXPORT QWaylandIntegration : public QPlatformIntegration
 {
@@ -112,6 +114,8 @@ public:
     QPlatformTheme *createPlatformTheme(const QString &name) const override;
 
     virtual QWaylandInputDevice *createInputDevice(QWaylandDisplay *display, int version, uint32_t id);
+
+    virtual QWaylandCursor *createPlatformCursor(QWaylandScreen *screen) const;
 
     virtual QWaylandClientBufferIntegration *clientBufferIntegration() const;
     virtual QWaylandServerBufferIntegration *serverBufferIntegration() const;

@@ -78,7 +78,7 @@ public:
     ~QWaylandCursorTheme();
     struct wl_cursor_image *cursorImage(Qt::CursorShape shape);
 
-private:
+protected:
     enum WaylandCursor {
         ArrowCursor = Qt::ArrowCursor,
         UpArrowCursor,
@@ -132,7 +132,7 @@ public:
     QSharedPointer<QWaylandBuffer> cursorBitmapImage(const QCursor *cursor);
     struct wl_cursor_image *cursorImage(Qt::CursorShape shape);
 
-private:
+protected:
     QWaylandDisplay *mDisplay = nullptr;
     QWaylandCursorTheme *mCursorTheme = nullptr;
     QPoint mLastPos;

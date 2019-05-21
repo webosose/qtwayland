@@ -51,6 +51,7 @@
 #include "qwaylanddnd_p.h"
 #include "qwaylandwindowmanagerintegration_p.h"
 #include "qwaylandscreen_p.h"
+#include "qwaylandcursor_p.h"
 
 #if defined(Q_OS_MACOS)
 #  include <QtFontDatabaseSupport/private/qcoretextfontdatabase_p.h>
@@ -318,6 +319,11 @@ QStringList QWaylandIntegration::themeNames() const
 QPlatformTheme *QWaylandIntegration::createPlatformTheme(const QString &name) const
 {
     return GenericWaylandTheme::createUnixTheme(name);
+}
+
+QWaylandCursor *QWaylandIntegration::createPlatformCursor(QWaylandScreen *screen) const
+{
+   return new QWaylandCursor(screen);
 }
 
 QWaylandClientBufferIntegration *QWaylandIntegration::clientBufferIntegration() const
