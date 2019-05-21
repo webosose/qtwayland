@@ -269,6 +269,33 @@ void QWaylandKeyboardPrivate::updateModifierState(uint code, uint32_t state, boo
 #endif
 }
 
+void QWaylandKeyboard::updateModifierState(QWaylandKeyboard *refKeyboard)
+{
+    Q_D(QWaylandKeyboard);
+    d->updateModifierState(refKeyboard);
+
+}
+/* Copy the target Keybord's modifier state.
+ * NOTE: This it value copy of the target modifier data.  So we should update xkb_state too.
+ * */
+void QWaylandKeyboardPrivate::updateModifierState(QWaylandKeyboard *refKeyboard)
+{
+#if QT_CONFIG(xkbcommon)
+
+    if (refKeyboard) {
+        modsDepressed = xkb_state_serialize_mods(refKeyboard->d_func()->xkb_state, (xkb_state_component)XKB_STATE_MODS_DEPRESSED);
+        modsLatched   = xkb_state_serialize_mods(refKeyboard->d_func()->xkb_state, (xkb_state_component)XKB_STATE_MODS_LATCHED);
+        modsLocked    = xkb_state_serialize_mods(refKeyboard->d_func()->xkb_state, (xkb_state_component)XKB_STATE_MODS_LOCKED);
+        group         = xkb_state_serialize_group(refKeyboard->d_func()->xkb_state, (xkb_state_component)XKB_STATE_EFFECTIVE);
+
+        xkb_state_update_mask(xkb_state, modsDepressed, modsLatched, modsLocked, 0, 0, group);
+        modifiers(compositor()->nextSerial(), modsDepressed, modsLatched, modsLocked, group);
+    }
+#else
+    Q_UNUSED(refKeyboard);
+#endif
+}
+
 // If there is no key currently pressed, update the keymap right away.
 // Otherwise, delay the update when keys are released
 // see http://lists.freedesktop.org/archives/wayland-devel/2013-October/011395.html

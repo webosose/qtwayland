@@ -79,6 +79,7 @@ public:
 
     QWaylandSurface *focus() const;
     QWaylandClient *focusClient() const;
+    void updateModifierState(QWaylandKeyboard *refKeyboard);
 
     virtual void addClient(QWaylandClient *client, uint32_t id, uint32_t version);
 

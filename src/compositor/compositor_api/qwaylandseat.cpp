@@ -552,6 +552,13 @@ bool QWaylandSeat::setKeyboardFocus(QWaylandSurface *surface)
     return true;
 }
 
+void QWaylandSeat::updateModifierState(QWaylandSeat *inputDev)
+{
+    if (inputDev) {
+        keyboard()->updateModifierState(inputDev->keyboard());
+    }
+}
+
 QWaylandKeymap *QWaylandSeat::keymap()
 {
     PMTRACE_QTWL_FUNCTION;

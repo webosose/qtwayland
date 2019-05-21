@@ -804,6 +804,8 @@ void QWaylandInputDevice::Keyboard::keyboard_key(uint32_t serial, uint32_t time,
 
     QString composedText;
     xkb_keysym_t sym = xkb_state_key_get_one_sym(mXkbState, code);
+    xkb_state_update_key(mXkbState, code, isDown ? XKB_KEY_DOWN : XKB_KEY_UP);
+
     if (mXkbComposeState) {
         if (isDown)
             xkb_compose_state_feed(mXkbComposeState, sym);
@@ -894,6 +896,11 @@ void QWaylandInputDevice::Keyboard::keyboard_modifiers(uint32_t serial,
     PMTRACE_QTWLCLI_FUNCTION;
     Q_UNUSED(serial);
 #if QT_CONFIG(xkbcommon)
+
+    if (!loadKeyMap()) {
+        return;
+    }
+
     if (mXkbState)
         xkb_state_update_mask(mXkbState,
                               mods_depressed, mods_latched, mods_locked,

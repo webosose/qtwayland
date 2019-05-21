@@ -113,6 +113,7 @@ public:
     //But can be set manually for use with touch or can reset unset the current mouse focus;
     QWaylandView *mouseFocus() const;
     void setMouseFocus(QWaylandView *view);
+    void updateModifierState(QWaylandSeat *inputDev);
 
     QWaylandKeyboard *keyboard() const;
     QWaylandSurface *keyboardFocus() const;
