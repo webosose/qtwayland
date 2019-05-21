@@ -121,7 +121,7 @@ public:
 
     QWaylandSeat *defaultSeat() const;
 
-    QWaylandSeat *seatFor(QInputEvent *inputEvent);
+    virtual QWaylandSeat *seatFor(QInputEvent *inputEvent);
 
     bool useHardwareIntegrationExtension() const;
     void setUseHardwareIntegrationExtension(bool use);
