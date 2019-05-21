@@ -39,16 +39,16 @@ void TestKeyboardGrabber::setFocus(QWaylandSurface *surface)
     QWaylandKeyboard::setFocus(surface);
 }
 
-void TestKeyboardGrabber::sendKeyPressEvent(uint code)
+void TestKeyboardGrabber::sendKeyPressEvent(uint code, bool repeat)
 {
     Q_EMIT keyPressCalled();
-    QWaylandKeyboard::sendKeyPressEvent(code);
+    QWaylandKeyboard::sendKeyPressEvent(code, repeat);
 }
 
-void TestKeyboardGrabber::sendKeyReleaseEvent(uint code)
+void TestKeyboardGrabber::sendKeyReleaseEvent(uint code, bool repeat)
 {
     Q_EMIT keyReleaseCalled();
-    QWaylandKeyboard::sendKeyReleaseEvent(code);
+    QWaylandKeyboard::sendKeyReleaseEvent(code, repeat);
 }
 
 void TestKeyboardGrabber::sendKeyModifiers(QWaylandClient *client, uint32_t serial)

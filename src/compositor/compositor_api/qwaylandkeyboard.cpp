@@ -181,7 +181,7 @@ void QWaylandKeyboardPrivate::keyEvent(uint code, uint32_t state)
     }
 }
 
-void QWaylandKeyboardPrivate::sendKeyEvent(uint code, uint32_t state)
+void QWaylandKeyboardPrivate::sendKeyEvent(uint code, uint32_t state, bool repeat)
 {
     uint32_t time = compositor()->currentTimeMsecs();
     uint32_t serial = compositor()->nextSerial();
@@ -190,8 +190,10 @@ void QWaylandKeyboardPrivate::sendKeyEvent(uint code, uint32_t state)
 #else
     uint key = code;
 #endif
-    if (focusResource)
+    if (focusResource) {
         send_key(focusResource->handle, serial, time, key, state);
+        updateModifierState(code, state, repeat);
+    }
 }
 
 void QWaylandKeyboardPrivate::modifiers(uint32_t serial, uint32_t mods_depressed,
@@ -228,11 +230,18 @@ void QWaylandKeyboardPrivate::maybeUpdateXkbScanCodeTable()
 }
 #endif
 
-void QWaylandKeyboardPrivate::updateModifierState(uint code, uint32_t state)
+void QWaylandKeyboardPrivate::updateModifierState(uint code, uint32_t state, bool repeat)
 {
 #if QT_CONFIG(xkbcommon)
     if (!xkb_context)
         return;
+
+    // xkb needs to match a the series of calls a XKB_KEY_DOWN, needs to be matched with
+    // XKB_KEY_UP, hence when repeating down update the state otherwise situations like
+    // "stuck modifiers" may occur.
+    if (repeat) {
+        return;
+    }
 
     xkb_state_update_key(xkb_state, code, state == WL_KEYBOARD_KEY_STATE_PRESSED ? XKB_KEY_DOWN : XKB_KEY_UP);
 
@@ -256,6 +265,7 @@ void QWaylandKeyboardPrivate::updateModifierState(uint code, uint32_t state)
 #else
     Q_UNUSED(code);
     Q_UNUSED(state);
+    Q_UNUSED(repeat);
 #endif
 }
 
@@ -507,19 +517,19 @@ void QWaylandKeyboard::sendKeyModifiers(QWaylandClient *client, uint serial)
 /*!
  * Sends a key press event with the key \a code to the current keyboard focus.
  */
-void QWaylandKeyboard::sendKeyPressEvent(uint code)
+void QWaylandKeyboard::sendKeyPressEvent(uint code, bool repeat)
 {
     Q_D(QWaylandKeyboard);
-    d->sendKeyEvent(code, WL_KEYBOARD_KEY_STATE_PRESSED);
+    d->sendKeyEvent(code, WL_KEYBOARD_KEY_STATE_PRESSED, repeat);
 }
 
 /*!
  * Sends a key release event with the key \a code to the current keyboard focus.
  */
-void QWaylandKeyboard::sendKeyReleaseEvent(uint code)
+void QWaylandKeyboard::sendKeyReleaseEvent(uint code, bool repeat)
 {
     Q_D(QWaylandKeyboard);
-    d->sendKeyEvent(code, WL_KEYBOARD_KEY_STATE_RELEASED);
+    d->sendKeyEvent(code, WL_KEYBOARD_KEY_STATE_RELEASED, repeat);
 }
 
 /*!

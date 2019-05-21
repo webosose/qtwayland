@@ -149,7 +149,7 @@ public:
 
         if (!ke->repeat) {
             keyb->maybeUpdateKeymap();
-            keyb->updateModifierState(code, isDown ? WL_KEYBOARD_KEY_STATE_PRESSED : WL_KEYBOARD_KEY_STATE_RELEASED);
+            keyb->updateModifierState(code, isDown ? WL_KEYBOARD_KEY_STATE_PRESSED : WL_KEYBOARD_KEY_STATE_RELEASED, ke->repeat);
         }
     }
 

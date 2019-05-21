@@ -36,8 +36,8 @@ public:
 
     void setFocus(QWaylandSurface *surface) override;
     void sendKeyModifiers(QWaylandClient *client, uint32_t serial) override;
-    void sendKeyPressEvent(uint code) override;
-    void sendKeyReleaseEvent(uint code) override;
+    void sendKeyPressEvent(uint code, bool repeat) override;
+    void sendKeyReleaseEvent(uint code, bool repeat) override;
 
 signals:
     void focusedCalled();

@@ -93,8 +93,8 @@ public:
 #endif
 
     void keyEvent(uint code, uint32_t state);
-    void sendKeyEvent(uint code, uint32_t state);
-    void updateModifierState(uint code, uint32_t state);
+    void sendKeyEvent(uint code, uint32_t state, bool repeat);
+    void updateModifierState(uint code, uint32_t state, bool repeat);
     void maybeUpdateKeymap();
 
     void checkFocusResource(Resource *resource);

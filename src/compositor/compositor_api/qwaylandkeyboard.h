@@ -74,8 +74,8 @@ public:
     virtual void setFocus(QWaylandSurface *surface);
 
     virtual void sendKeyModifiers(QWaylandClient *client, uint32_t serial);
-    virtual void sendKeyPressEvent(uint code);
-    virtual void sendKeyReleaseEvent(uint code);
+    virtual void sendKeyPressEvent(uint code, bool repeat = false);
+    virtual void sendKeyReleaseEvent(uint code, bool repeat = false);
 
     QWaylandSurface *focus() const;
     QWaylandClient *focusClient() const;

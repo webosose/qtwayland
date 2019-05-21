@@ -451,9 +451,9 @@ void QWaylandSeat::sendFullKeyEvent(QKeyEvent *event)
         }
 
         if (event->type() == QEvent::KeyPress)
-            d->keyboard->sendKeyPressEvent(scanCode);
+            d->keyboard->sendKeyPressEvent(scanCode, event->isAutoRepeat());
         else if (event->type() == QEvent::KeyRelease)
-            d->keyboard->sendKeyReleaseEvent(scanCode);
+            d->keyboard->sendKeyReleaseEvent(scanCode, event->isAutoRepeat());
     }
 }
 
