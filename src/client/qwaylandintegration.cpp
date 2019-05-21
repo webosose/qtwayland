@@ -326,6 +326,11 @@ QWaylandCursor *QWaylandIntegration::createPlatformCursor(QWaylandScreen *screen
    return new QWaylandCursor(screen);
 }
 
+QWaylandScreen *QWaylandIntegration::createPlatformScreen(QWaylandDisplay *waylandDisplay, int version, uint32_t id) const
+{
+   return new QWaylandScreen(waylandDisplay, version, id);
+}
+
 QWaylandClientBufferIntegration *QWaylandIntegration::clientBufferIntegration() const
 {
     if (!mClientBufferIntegrationInitialized)

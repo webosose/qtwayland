@@ -116,6 +116,7 @@ public:
     virtual QWaylandInputDevice *createInputDevice(QWaylandDisplay *display, int version, uint32_t id);
 
     virtual QWaylandCursor *createPlatformCursor(QWaylandScreen *screen) const;
+    virtual QWaylandScreen *createPlatformScreen(QWaylandDisplay *waylandDisplay, int version, uint32_t id) const;
 
     virtual QWaylandClientBufferIntegration *clientBufferIntegration() const;
     virtual QWaylandServerBufferIntegration *serverBufferIntegration() const;

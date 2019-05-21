@@ -276,7 +276,7 @@ void QWaylandDisplay::registry_global(uint32_t id, const QString &interface, uin
     struct ::wl_registry *registry = object();
 
     if (interface == QStringLiteral("wl_output")) {
-        QWaylandScreen *screen = new QWaylandScreen(this, version, id);
+        QWaylandScreen *screen = mWaylandIntegration->createPlatformScreen(this, version, id);
         mScreens.append(screen);
         // We need to get the output events before creating surfaces
         forceRoundTrip();
