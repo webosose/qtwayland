@@ -68,6 +68,8 @@
 #include <wayland-cursor.h>
 #endif
 
+#include "qtwaylandclienttracer.h"
+
 #include <QtGui/QGuiApplication>
 
 #if QT_CONFIG(xkbcommon)
@@ -235,6 +237,7 @@ QWaylandInputDevice::~QWaylandInputDevice()
 
 void QWaylandInputDevice::seat_capabilities(uint32_t caps)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     mCaps = caps;
 
     if (caps & WL_SEAT_CAPABILITY_KEYBOARD && !mKeyboard) {
@@ -272,27 +275,32 @@ void QWaylandInputDevice::seat_capabilities(uint32_t caps)
 
 QWaylandInputDevice::Keyboard *QWaylandInputDevice::createKeyboard(QWaylandInputDevice *device)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     return new Keyboard(device);
 }
 
 QWaylandInputDevice::Pointer *QWaylandInputDevice::createPointer(QWaylandInputDevice *device)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     return new Pointer(device);
 }
 
 QWaylandInputDevice::Touch *QWaylandInputDevice::createTouch(QWaylandInputDevice *device)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     return new Touch(device);
 }
 
 void QWaylandInputDevice::handleWindowDestroyed(QWaylandWindow *window)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (mKeyboard && window == mKeyboard->mFocus)
         mKeyboard->stopRepeat();
 }
 
 void QWaylandInputDevice::handleEndDrag()
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (mTouch)
         mTouch->releasePoints();
     if (mPointer)
@@ -302,11 +310,14 @@ void QWaylandInputDevice::handleEndDrag()
 #if QT_CONFIG(wayland_datadevice)
 void QWaylandInputDevice::setDataDevice(QWaylandDataDevice *device)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     mDataDevice = device;
 }
 
 QWaylandDataDevice *QWaylandInputDevice::dataDevice() const
 {
+    PMTRACE_QTWLCLI_FUNCTION;
+    Q_ASSERT(mDataDevice);
     return mDataDevice;
 }
 #endif
@@ -323,27 +334,32 @@ QWaylandTextInput *QWaylandInputDevice::textInput() const
 
 void QWaylandInputDevice::removeMouseButtonFromState(Qt::MouseButton button)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (mPointer)
         mPointer->mButtons = mPointer->mButtons & !button;
 }
 
 QWaylandWindow *QWaylandInputDevice::pointerFocus() const
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     return mPointer ? mPointer->mFocus : nullptr;
 }
 
 QWaylandWindow *QWaylandInputDevice::keyboardFocus() const
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     return mKeyboard ? mKeyboard->mFocus : nullptr;
 }
 
 QWaylandWindow *QWaylandInputDevice::touchFocus() const
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     return mTouch ? mTouch->mFocus : nullptr;
 }
 
 Qt::KeyboardModifiers QWaylandInputDevice::modifiers() const
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (!mKeyboard)
         return Qt::NoModifier;
 
@@ -352,6 +368,7 @@ Qt::KeyboardModifiers QWaylandInputDevice::modifiers() const
 
 Qt::KeyboardModifiers QWaylandInputDevice::Keyboard::modifiers() const
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     Qt::KeyboardModifiers ret = Qt::NoModifier;
 
 #if QT_CONFIG(xkbcommon)
@@ -367,6 +384,7 @@ Qt::KeyboardModifiers QWaylandInputDevice::Keyboard::modifiers() const
 #if QT_CONFIG(cursor)
 uint32_t QWaylandInputDevice::cursorSerial() const
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (mPointer)
         return mPointer->mCursorSerial;
     return 0;
@@ -374,6 +392,7 @@ uint32_t QWaylandInputDevice::cursorSerial() const
 
 void QWaylandInputDevice::setCursor(Qt::CursorShape newShape, QWaylandScreen *screen)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     struct wl_cursor_image *image = screen->waylandCursor()->cursorImage(newShape);
     if (!image) {
         return;
@@ -411,6 +430,7 @@ void QWaylandInputDevice::setCursor(struct wl_buffer *buffer, struct wl_cursor_i
 // size and hotspot are in surface coordinates
 void QWaylandInputDevice::setCursor(struct wl_buffer *buffer, const QPoint &hotSpot, const QSize &size, int bufferScale)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (mCaps & WL_SEAT_CAPABILITY_POINTER) {
         bool force = mPointer->mEnterSerial > mPointer->mCursorSerial;
 
@@ -441,6 +461,7 @@ void QWaylandInputDevice::setCursor(struct wl_buffer *buffer, const QPoint &hotS
 
 void QWaylandInputDevice::setCursor(const QSharedPointer<QWaylandBuffer> &buffer, const QPoint &hotSpot, int bufferScale)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     setCursor(buffer->buffer(), hotSpot, buffer->size(), bufferScale);
     mPixmapCursor = buffer;
 }
@@ -457,6 +478,7 @@ public:
 void QWaylandInputDevice::Pointer::pointer_enter(uint32_t serial, struct wl_surface *surface,
                                                  wl_fixed_t sx, wl_fixed_t sy)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (!surface)
         return;
 
@@ -482,6 +504,7 @@ void QWaylandInputDevice::Pointer::pointer_enter(uint32_t serial, struct wl_surf
 
 void QWaylandInputDevice::Pointer::pointer_leave(uint32_t time, struct wl_surface *surface)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     // The event may arrive after destroying the window, indicated by
     // a null surface.
     if (!surface)
@@ -508,6 +531,8 @@ public:
 
 void QWaylandInputDevice::Pointer::pointer_motion(uint32_t time, wl_fixed_t surface_x, wl_fixed_t surface_y)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
+
     QWaylandWindow *window = mFocus;
     if (!window) {
         // We destroyed the pointer focus surface, but the server didn't get the message yet...
@@ -541,6 +566,7 @@ void QWaylandInputDevice::Pointer::pointer_motion(uint32_t time, wl_fixed_t surf
 void QWaylandInputDevice::Pointer::pointer_button(uint32_t serial, uint32_t time,
                                                   uint32_t button, uint32_t state)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     QWaylandWindow *window = mFocus;
     if (!window) {
         // We destroyed the pointer focus surface, but the server didn't get the message yet...
@@ -596,6 +622,7 @@ void QWaylandInputDevice::Pointer::pointer_button(uint32_t serial, uint32_t time
 
 void QWaylandInputDevice::Pointer::releaseButtons()
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     mButtons = Qt::NoButton;
     MotionEvent e(mParent->mTime, mSurfacePos, mGlobalPos, mButtons, mParent->modifiers());
     if (mFocus)
@@ -613,6 +640,7 @@ public:
 
 void QWaylandInputDevice::Pointer::pointer_axis(uint32_t time, uint32_t axis, int32_t value)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     QWaylandWindow *window = mFocus;
     if (!window) {
         // We destroyed the pointer focus surface, but the server didn't get the message yet...
@@ -641,6 +669,8 @@ void QWaylandInputDevice::Pointer::pointer_axis(uint32_t time, uint32_t axis, in
 void QWaylandInputDevice::Keyboard::keyboard_keymap(uint32_t format, int32_t fd, uint32_t size)
 {
 #if QT_CONFIG(xkbcommon)
+    PMTRACE_QTWLCLI_FUNCTION;
+
     if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) {
         close(fd);
         return;
@@ -659,6 +689,7 @@ void QWaylandInputDevice::Keyboard::keyboard_keymap(uint32_t format, int32_t fd,
 #if QT_CONFIG(xkbcommon)
 bool QWaylandInputDevice::Keyboard::loadKeyMap()
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (!mPendingKeymap && mXkbContext && mXkbMap && mXkbState) {
         return true;
     }
@@ -696,6 +727,7 @@ bool QWaylandInputDevice::Keyboard::loadKeyMap()
 
 void QWaylandInputDevice::Keyboard::keyboard_enter(uint32_t time, struct wl_surface *surface, struct wl_array *keys)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     Q_UNUSED(time);
     Q_UNUSED(keys);
 
@@ -710,6 +742,7 @@ void QWaylandInputDevice::Keyboard::keyboard_enter(uint32_t time, struct wl_surf
 
 void QWaylandInputDevice::Keyboard::keyboard_leave(uint32_t time, struct wl_surface *surface)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     Q_UNUSED(time);
     Q_UNUSED(surface);
 
@@ -747,6 +780,7 @@ static void sendKey(QWindow *tlw, ulong timestamp, QEvent::Type type, int key, Q
 
 void QWaylandInputDevice::Keyboard::keyboard_key(uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     QWaylandWindow *window = mFocus;
     if (!window) {
         // We destroyed the keyboard focus surface, but the server didn't get the message yet...
@@ -826,6 +860,7 @@ void QWaylandInputDevice::Keyboard::keyboard_key(uint32_t serial, uint32_t time,
 
 void QWaylandInputDevice::Keyboard::repeatKey()
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (!mFocus) {
         // We destroyed the keyboard focus surface, but the server didn't get the message yet...
         // or the server didn't send an enter event first.
@@ -856,6 +891,7 @@ void QWaylandInputDevice::Keyboard::keyboard_modifiers(uint32_t serial,
                                              uint32_t mods_locked,
                                              uint32_t group)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     Q_UNUSED(serial);
 #if QT_CONFIG(xkbcommon)
     if (mXkbState)
@@ -879,9 +915,11 @@ void QWaylandInputDevice::Touch::touch_down(uint32_t serial,
                                      wl_fixed_t x,
                                      wl_fixed_t y)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     if (!surface)
         return;
 
+    PMTRACE_QTWLCLI_COORDINATE("touch_down", wl_fixed_to_int(x), wl_fixed_to_int(y));
     mParent->mTime = time;
     mParent->mSerial = serial;
     mFocus = QWaylandWindow::fromWlSurface(surface);
@@ -891,6 +929,7 @@ void QWaylandInputDevice::Touch::touch_down(uint32_t serial,
 
 void QWaylandInputDevice::Touch::touch_up(uint32_t serial, uint32_t time, int32_t id)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     Q_UNUSED(serial);
     Q_UNUSED(time);
     mFocus = nullptr;
@@ -906,12 +945,15 @@ void QWaylandInputDevice::Touch::touch_up(uint32_t serial, uint32_t time, int32_
 
 void QWaylandInputDevice::Touch::touch_motion(uint32_t time, int32_t id, wl_fixed_t x, wl_fixed_t y)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     Q_UNUSED(time);
+    PMTRACE_QTWLCLI_COORDINATE("touch_motion", wl_fixed_to_int(x), wl_fixed_to_int(y));
     mParent->handleTouchPoint(id, wl_fixed_to_double(x), wl_fixed_to_double(y), Qt::TouchPointMoved);
 }
 
 void QWaylandInputDevice::Touch::touch_cancel()
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     mPrevTouchPoints.clear();
     mTouchPoints.clear();
 
@@ -924,6 +966,7 @@ void QWaylandInputDevice::Touch::touch_cancel()
 
 void QWaylandInputDevice::handleTouchPoint(int id, double x, double y, Qt::TouchPointState state)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     QWindowSystemInterface::TouchPoint tp;
 
     // Find out the coordinates for Released events.
@@ -962,6 +1005,7 @@ void QWaylandInputDevice::handleTouchPoint(int id, double x, double y, Qt::Touch
 
 bool QWaylandInputDevice::Touch::allTouchPointsReleased()
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     for (int i = 0; i < mTouchPoints.count(); ++i)
         if (mTouchPoints.at(i).state != Qt::TouchPointReleased)
             return false;
@@ -981,6 +1025,7 @@ void QWaylandInputDevice::Touch::releasePoints()
 
 void QWaylandInputDevice::Touch::touch_frame()
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     // Copy all points, that are in the previous but not in the current list, as stationary.
     for (int i = 0; i < mPrevTouchPoints.count(); ++i) {
         const QWindowSystemInterface::TouchPoint &prevPoint(mPrevTouchPoints.at(i));

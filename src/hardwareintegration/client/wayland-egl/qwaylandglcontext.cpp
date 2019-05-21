@@ -46,6 +46,8 @@
 #include <QtWaylandClient/private/qwaylandintegration_p.h>
 #include "qwaylandeglwindow.h"
 
+#include "qtwaylandclienttracer.h"
+
 #include <QDebug>
 #include <QtEglSupport/private/qeglconvenience_p.h>
 #include <QtGui/private/qopenglcontext_p.h>
@@ -145,7 +147,9 @@ public:
     }
     void blit(QWaylandEglWindow *window)
     {
+        PMTRACE_QTWLCLI_FUNCTION;
         Q_ASSERT(window->wl_surface::isInitialized());
+
         QOpenGLTextureCache *cache = QOpenGLTextureCache::cacheForContext(m_context->context());
 
         QRect windowRect = window->window()->frameGeometry();
@@ -542,6 +546,7 @@ private:
 
 void QWaylandGLContext::swapBuffers(QPlatformSurface *surface)
 {
+    PMTRACE_QTWLCLI_FUNCTION;
     QWaylandEglWindow *window = static_cast<QWaylandEglWindow *>(surface);
 
     EGLSurface eglSurface = window->eglSurface();

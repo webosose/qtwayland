@@ -55,7 +55,7 @@ SOURCES +=  qwaylandintegration.cpp \
             qwaylandwindowmanagerintegration.cpp \
             qwaylandinputcontext.cpp \
             qwaylandshm.cpp \
-            qwaylandbuffer.cpp \
+            qwaylandbuffer.cpp
 
 HEADERS +=  qwaylandintegration_p.h \
             qwaylandnativeinterface_p.h \
@@ -83,10 +83,23 @@ HEADERS +=  qwaylandintegration_p.h \
             ../shared/qwaylandmimehelper_p.h \
             ../shared/qwaylandxkb_p.h \
             ../shared/qwaylandsharedmemoryformathelper_p.h \
+            qtwaylandclienttracer.h
 
 qtConfig(clipboard) {
     HEADERS += qwaylandclipboard_p.h
     SOURCES += qwaylandclipboard.cpp
+}
+
+lttng {
+    DEFINES += HAS_LTTNG
+    SOURCES +=  pmtrace_qtwaylandclient_provider.c
+    HEADERS +=  pmtrace_qtwaylandclient_provider.h
+    !contains(QT_CONFIG, no-pkg-config) {
+        CONFIG += link_pkgconfig
+        PKGCONFIG += lttng-ust
+    } else {
+        LIBS += -llttng-ust
+    }
 }
 
 include(hardwareintegration/hardwareintegration.pri)

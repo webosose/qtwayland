@@ -28,7 +28,10 @@ HEADERS += \
     compositor_api/qwaylandresource.h \
     compositor_api/qwaylandsurfacegrabber.h \
     compositor_api/qwaylandoutputmode_p.h \
-    compositor_api/qwaylandquickchildren.h
+    compositor_api/qwaylandquickchildren.h \
+    compositor_api/qtwaylandtracer.h
+
+
 
 SOURCES += \
     compositor_api/qwaylandcompositor.cpp \
@@ -53,6 +56,18 @@ qtConfig(im) {
         compositor_api/qwaylandinputmethodcontrol_p.h
     SOURCES += \
         compositor_api/qwaylandinputmethodcontrol.cpp
+}
+
+lttng {
+    DEFINES += HAS_LTTNG
+    SOURCES +=  compositor_api/pmtrace_qtwayland_provider.c
+    HEADERS +=  compositor_api/pmtrace_qtwayland_provider.h
+    !contains(QT_CONFIG, no-pkg-config) {
+        CONFIG += link_pkgconfig
+        PKGCONFIG += lttng-ust
+    } else {
+        LIBS += -llttng-ust
+    }
 }
 
 QT += core-private

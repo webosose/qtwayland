@@ -58,6 +58,8 @@
 #include "extensions/qwlqtkey_p.h"
 #include "extensions/qwaylandtextinput.h"
 
+#include "qtwaylandtracer.h"
+
 QT_BEGIN_NAMESPACE
 
 QWaylandSeatPrivate::QWaylandSeatPrivate(QWaylandSeat *seat) :
@@ -197,6 +199,7 @@ QWaylandSeat::~QWaylandSeat()
 
 void QWaylandSeat::initialize()
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     d->init(d->compositor->display(), 4);
 
@@ -212,6 +215,7 @@ void QWaylandSeat::initialize()
 
 bool QWaylandSeat::isInitialized() const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     return d->isInitialized;
 }
@@ -221,6 +225,7 @@ bool QWaylandSeat::isInitialized() const
  */
 void QWaylandSeat::sendMousePressEvent(Qt::MouseButton button)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     d->pointer->sendMousePressEvent(button);
 }
@@ -230,6 +235,7 @@ void QWaylandSeat::sendMousePressEvent(Qt::MouseButton button)
  */
 void QWaylandSeat::sendMouseReleaseEvent(Qt::MouseButton button)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     d->pointer->sendMouseReleaseEvent(button);
 }
@@ -240,6 +246,7 @@ void QWaylandSeat::sendMouseReleaseEvent(Qt::MouseButton button)
  **/
 void QWaylandSeat::sendMouseMoveEvent(QWaylandView *view, const QPointF &localPos, const QPointF &outputSpacePos)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     d->pointer->sendMouseMoveEvent(view, localPos, outputSpacePos);
 }
@@ -249,6 +256,7 @@ void QWaylandSeat::sendMouseMoveEvent(QWaylandView *view, const QPointF &localPo
  */
 void QWaylandSeat::sendMouseWheelEvent(Qt::Orientation orientation, int delta)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     d->pointer->sendMouseWheelEvent(orientation, delta);
 }
@@ -258,6 +266,7 @@ void QWaylandSeat::sendMouseWheelEvent(Qt::Orientation orientation, int delta)
  */
 void QWaylandSeat::sendKeyPressEvent(uint code)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     d->keyboard->sendKeyPressEvent(code);
 }
@@ -267,6 +276,7 @@ void QWaylandSeat::sendKeyPressEvent(uint code)
  */
 void QWaylandSeat::sendKeyReleaseEvent(uint code)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     d->keyboard->sendKeyReleaseEvent(code);
 }
@@ -279,6 +289,7 @@ void QWaylandSeat::sendKeyReleaseEvent(uint code)
  */
 uint QWaylandSeat::sendTouchPointEvent(QWaylandSurface *surface, int id, const QPointF &point, Qt::TouchPointState state)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
 
     if (d->touch.isNull())
@@ -378,6 +389,7 @@ uint QWaylandSeat::sendTouchPointMoved(QWaylandSurface *surface, int id, const Q
  */
 void QWaylandSeat::sendTouchFrameEvent(QWaylandClient *client)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     if (!d->touch.isNull())
         d->touch->sendFrameEvent(client);
@@ -394,6 +406,7 @@ void QWaylandSeat::sendTouchFrameEvent(QWaylandClient *client)
  */
 void QWaylandSeat::sendTouchCancelEvent(QWaylandClient *client)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     if (!d->touch.isNull())
         d->touch->sendCancelEvent(client);
@@ -404,6 +417,7 @@ void QWaylandSeat::sendTouchCancelEvent(QWaylandClient *client)
  */
 void QWaylandSeat::sendFullTouchEvent(QWaylandSurface *surface, QTouchEvent *event)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
 
     if (!d->touch)
@@ -417,6 +431,7 @@ void QWaylandSeat::sendFullTouchEvent(QWaylandSurface *surface, QTouchEvent *eve
  */
 void QWaylandSeat::sendFullKeyEvent(QKeyEvent *event)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
 
     if (!keyboardFocus()) {
@@ -492,6 +507,7 @@ void QWaylandSeat::sendKeyEvent(int qtKey, bool pressed)
  */
 QWaylandKeyboard *QWaylandSeat::keyboard() const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     return d->keyboard.data();
 }
@@ -501,6 +517,7 @@ QWaylandKeyboard *QWaylandSeat::keyboard() const
  */
 QWaylandSurface *QWaylandSeat::keyboardFocus() const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     if (d->keyboard.isNull() || !d->keyboard->focus())
         return nullptr;
@@ -515,6 +532,7 @@ QWaylandSurface *QWaylandSeat::keyboardFocus() const
  */
 bool QWaylandSeat::setKeyboardFocus(QWaylandSurface *surface)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     if (surface && surface->isDestroyed())
         return false;
@@ -536,6 +554,7 @@ bool QWaylandSeat::setKeyboardFocus(QWaylandSurface *surface)
 
 QWaylandKeymap *QWaylandSeat::keymap()
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     return d->keymap.data();
 }
@@ -545,6 +564,7 @@ QWaylandKeymap *QWaylandSeat::keymap()
  */
 QWaylandPointer *QWaylandSeat::pointer() const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     return d->pointer.data();
 }
@@ -554,6 +574,7 @@ QWaylandPointer *QWaylandSeat::pointer() const
  */
 QWaylandTouch *QWaylandSeat::touch() const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     return d->touch.data();
 }
@@ -563,6 +584,7 @@ QWaylandTouch *QWaylandSeat::touch() const
  */
 QWaylandView *QWaylandSeat::mouseFocus() const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     return d->mouseFocus;
 }
@@ -572,6 +594,7 @@ QWaylandView *QWaylandSeat::mouseFocus() const
  */
 void QWaylandSeat::setMouseFocus(QWaylandView *view)
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(QWaylandSeat);
     if (view == d->mouseFocus)
         return;
@@ -592,6 +615,7 @@ void QWaylandSeat::setMouseFocus(QWaylandView *view)
  */
 QWaylandCompositor *QWaylandSeat::compositor() const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     return d->compositor;
 }
@@ -602,6 +626,7 @@ QWaylandCompositor *QWaylandSeat::compositor() const
 #if QT_CONFIG(draganddrop)
 QWaylandDrag *QWaylandSeat::drag() const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     return d->drag_handle.data();
 }
@@ -612,6 +637,7 @@ QWaylandDrag *QWaylandSeat::drag() const
  */
 QWaylandSeat::CapabilityFlags QWaylandSeat::capabilities() const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_D(const QWaylandSeat);
     return d->capabilities;
 }
@@ -621,6 +647,7 @@ QWaylandSeat::CapabilityFlags QWaylandSeat::capabilities() const
  */
 bool QWaylandSeat::isOwner(QInputEvent *inputEvent) const
 {
+    PMTRACE_QTWL_FUNCTION;
     Q_UNUSED(inputEvent);
     return true;
 }
@@ -631,6 +658,7 @@ bool QWaylandSeat::isOwner(QInputEvent *inputEvent) const
  */
 QWaylandSeat *QWaylandSeat::fromSeatResource(struct ::wl_resource *resource)
 {
+    PMTRACE_QTWL_FUNCTION;
     if (auto *r = QWaylandSeatPrivate::Resource::fromResource(resource))
         return static_cast<QWaylandSeatPrivate *>(r->seat_object)->q_func();
     return nullptr;
@@ -644,6 +672,7 @@ QWaylandSeat *QWaylandSeat::fromSeatResource(struct ::wl_resource *resource)
 
 void QWaylandSeat::handleMouseFocusDestroyed()
 {
+    PMTRACE_QTWL_FUNCTION;
     // This is triggered when the QWaylandView is destroyed, NOT the surface.
     // ... so this is for the rare case when the view that currently holds the mouse focus is
     // destroyed before its surface
