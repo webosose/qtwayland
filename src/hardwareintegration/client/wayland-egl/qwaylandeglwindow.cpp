@@ -131,7 +131,11 @@ void QWaylandEglWindow::updateSurface(bool create)
             if (!disableResizeCheck) {
                 wl_egl_window_get_attached_size(m_waylandEglWindow, &current_width, &current_height);
             }
-            if (disableResizeCheck || (current_width != sizeWithMargins.width() || current_height != sizeWithMargins.height())) {
+            // Window would be resized when
+            // 1) geometry was different from current buffer size
+            // 2) even though size was same but the previous resizing was not completed.
+            if (disableResizeCheck || (current_width != sizeWithMargins.width() || current_height != sizeWithMargins.height() || m_requestedSize != sizeWithMargins)) {
+                m_requestedSize = sizeWithMargins;
                 wl_egl_window_resize(m_waylandEglWindow, sizeWithMargins.width(), sizeWithMargins.height(), mOffset.x(), mOffset.y());
                 mOffset = QPoint();
 

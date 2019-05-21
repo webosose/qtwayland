@@ -89,6 +89,7 @@ private:
     mutable QOpenGLFramebufferObject *m_contentFBO = nullptr;
 
     QSurfaceFormat m_format;
+    QSize m_requestedSize;
 };
 
 }
