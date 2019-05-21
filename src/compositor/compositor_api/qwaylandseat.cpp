@@ -439,7 +439,7 @@ void QWaylandSeat::sendFullKeyEvent(QKeyEvent *event)
     if (ext && ext->postQtKeyEvent(event, keyboardFocus()))
         return;
 
-    if (!d->keyboard.isNull() && !event->isAutoRepeat()) {
+    if (!d->keyboard.isNull()) {
 
         uint scanCode = event->nativeScanCode();
         if (scanCode == 0)
