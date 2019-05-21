@@ -47,6 +47,7 @@
 #include <QtWaylandCompositor/qtwaylandcompositorglobal.h>
 #include <QtWaylandCompositor/qwaylandcompositorextension.h>
 #include <QtWaylandCompositor/qwaylandkeyboard.h>
+#include <wayland-server.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -61,6 +62,7 @@ class QWaylandDrag;
 class QWaylandKeyboard;
 class QWaylandPointer;
 class QWaylandTouch;
+class wl_client;
 
 class Q_WAYLAND_COMPOSITOR_EXPORT QWaylandSeat : public QWaylandObject
 {
@@ -133,6 +135,8 @@ public:
     virtual bool isOwner(QInputEvent *inputEvent) const;
 
     static QWaylandSeat *fromSeatResource(struct ::wl_resource *resource);
+
+    virtual void setCursorSurface(QWaylandSurface *surface, int hotspotX, int hotspotY, wl_client *client = 0);
 
 Q_SIGNALS:
     void mouseFocusChanged(QWaylandView *newFocus, QWaylandView *oldFocus);

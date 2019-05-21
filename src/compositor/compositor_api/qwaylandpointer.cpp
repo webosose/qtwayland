@@ -124,11 +124,10 @@ void QWaylandPointerPrivate::pointer_release(wl_pointer::Resource *resource)
 
 void QWaylandPointerPrivate::pointer_set_cursor(wl_pointer::Resource *resource, uint32_t serial, wl_resource *surface, int32_t hotspot_x, int32_t hotspot_y)
 {
-    Q_UNUSED(resource);
     Q_UNUSED(serial);
 
     if (!surface) {
-        seat->cursorSurfaceRequest(nullptr, 0, 0);
+        seat->setCursorSurface(nullptr, 0, 0, resource->client());
         return;
     }
 
@@ -143,7 +142,7 @@ void QWaylandPointerPrivate::pointer_set_cursor(wl_pointer::Resource *resource, 
     wl_resource *displayRes = wl_client_get_object(resource->client(), 1);
     if (s->setRole(&QWaylandPointerPrivate::s_role, displayRes, WL_DISPLAY_ERROR_INVALID_OBJECT)) {
         s->markAsCursorSurface(true);
-        seat->cursorSurfaceRequest(s, hotspot_x, hotspot_y);
+        seat->setCursorSurface(s, hotspot_x, hotspot_y, resource->client());
     }
 }
 

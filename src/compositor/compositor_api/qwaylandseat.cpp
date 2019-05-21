@@ -689,4 +689,10 @@ void QWaylandSeat::handleMouseFocusDestroyed()
     emit mouseFocusChanged(d->mouseFocus, oldFocus);
 }
 
+void QWaylandSeat::setCursorSurface(QWaylandSurface *surface, int hotspotX, int hotspotY, wl_client *client)
+{
+    Q_UNUSED(client);
+    emit cursorSurfaceRequest(surface, hotspotX, hotspotY);
+}
+
 QT_END_NAMESPACE
