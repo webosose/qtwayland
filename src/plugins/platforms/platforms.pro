@@ -12,8 +12,10 @@ qtConfig(wayland-egl): \
     }
 
 #The following integrations are only useful with QtWaylandCompositor
-qtConfig(wayland-brcm): \
-    SUBDIRS += qwayland-brcm-egl
+config_no_webos {
+    qtConfig(wayland-brcm): \
+        SUBDIRS += qwayland-brcm-egl
+}
 
 qtConfig(xcomposite-egl): \
     SUBDIRS += qwayland-xcomposite-egl

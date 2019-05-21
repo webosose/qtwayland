@@ -1,4 +1,7 @@
 TEMPLATE=subdirs
 
-SUBDIRS += client
+config_no_webos {
+    SUBDIRS += client
+}
+
 SUBDIRS += compositor

@@ -1,3 +1,5 @@
 TEMPLATE = subdirs
-SUBDIRS += \
-    bradient
+config_no_webos {
+    SUBDIRS += \
+        bradient
+}
