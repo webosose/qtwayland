@@ -202,8 +202,12 @@ void QWaylandWindow::initWindow()
     else
         setGeometry_helper(window()->geometry());
     setMask(window()->mask());
+#ifdef NO_WEBOS_PLATFORM
+    // Disable this line in webOS since we have our own window state
+    // logic in a descendant class and want it to be used always.
     if (mShellSurface)
         mShellSurface->requestWindowStates(window()->windowStates());
+#endif
     handleContentOrientationChange(window()->contentOrientation());
     mFlags = window()->flags();
 }
