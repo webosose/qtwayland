@@ -52,7 +52,7 @@ namespace QtWaylandClient {
 
 class QWaylandWindow;
 
-class QWaylandEglClientBufferIntegration : public QWaylandClientBufferIntegration
+class Q_WAYLAND_CLIENT_EXPORT QWaylandEglClientBufferIntegration : public QWaylandClientBufferIntegration
 {
 public:
     QWaylandEglClientBufferIntegration();

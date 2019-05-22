@@ -52,7 +52,7 @@ namespace QtWaylandClient {
 
 class QWaylandGLContext;
 
-class QWaylandEglWindow : public QWaylandWindow
+class Q_WAYLAND_CLIENT_EXPORT QWaylandEglWindow : public QWaylandWindow
 {
     Q_OBJECT
 public:

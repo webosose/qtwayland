@@ -143,3 +143,5 @@ MODULE_PLUGIN_TYPES = \
             wayland-decoration-client \
             wayland-shell-integration
 load(qt_module)
+#exports hardwareintegration to compile wayland plugin outside
+include(../hardwareintegration/client/wayland-egl/wayland-egl.pri)

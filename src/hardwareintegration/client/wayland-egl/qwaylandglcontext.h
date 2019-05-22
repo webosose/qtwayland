@@ -57,7 +57,7 @@ class QWaylandWindow;
 class QWaylandGLWindowSurface;
 class DecorationsBlitter;
 
-class QWaylandGLContext : public QPlatformOpenGLContext
+class Q_WAYLAND_CLIENT_EXPORT QWaylandGLContext : public QPlatformOpenGLContext
 {
 public:
     QWaylandGLContext(EGLDisplay eglDisplay, QWaylandDisplay *display, const QSurfaceFormat &format, QPlatformOpenGLContext *share);

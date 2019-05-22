@@ -1,6 +1,6 @@
 %modules = ( # path to module name map
     "QtWaylandCompositor" => "$basedir/src/compositor",
-    "QtWaylandClient" => "$basedir/src/client",
+    "QtWaylandClient" => "$basedir/src/client;$basedir/src/hardwareintegration/client/wayland-egl",
 );
 %moduleheaders = ( # restrict the module headers to those found in relative path
 );
