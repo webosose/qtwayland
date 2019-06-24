@@ -66,8 +66,12 @@ QWaylandWindow *QWaylandWindow::mMouseGrab = 0;
 QWaylandWindow::QWaylandWindow(QWindow *window)
     : QObject()
     , QPlatformWindow(window)
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
     , mScreen(QWaylandScreen::waylandScreenFromWindow(window))
     , mDisplay(mScreen->display())
+#else
+    , mDisplay(waylandScreen()->display())
+#endif
     , mShellSurface(0)
     , mSubSurfaceWindow(0)
     , mWindowDecoration(0)
@@ -507,6 +511,15 @@ QWaylandSubSurface *QWaylandWindow::subSurfaceWindow() const
     return mSubSurfaceWindow;
 }
 
+QWaylandScreen *QWaylandWindow::waylandScreen() const
+{
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
+    return mScreen;
+#else
+    return static_cast<QWaylandScreen *>(QPlatformWindow::screen());
+#endif
+}
+
 bool QWaylandWindow::shellManagesActiveState() const
 {
     return mShellSurface && mShellSurface->shellManagesActiveState();
@@ -549,7 +562,11 @@ void QWaylandWindow::setOrientationMask(Qt::ScreenOrientations mask)
         mShellSurface->setContentOrientationMask(mask);
 }
 
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
 void QWaylandWindow::setWindowState(Qt::WindowState state)
+#else
+void QWaylandWindow::setWindowState(Qt::WindowStates state)
+#endif
 {
     if (setWindowStateInternal(state))
         QWindowSystemInterface::flushWindowSystemEvents(); // Required for oldState to work on WindowStateChanged
@@ -768,7 +785,7 @@ void QWaylandWindow::handleMouseEventWithDecoration(QWaylandInputDevice *inputDe
 void QWaylandWindow::setMouseCursor(QWaylandInputDevice *device, const QCursor &cursor)
 {
     if (device->serial() >= device->cursorSerial()) {
-        device->setCursor(cursor, mScreen);
+        device->setCursor(cursor, waylandScreen());
         m_cursor = cursor;
     }
 }
@@ -803,7 +820,7 @@ bool QWaylandWindow::isExposed() const
 
 int QWaylandWindow::scale() const
 {
-    return screen()->scale();
+    return waylandScreen()->scale();
 }
 
 qreal QWaylandWindow::devicePixelRatio() const
@@ -822,7 +839,11 @@ bool QWaylandWindow::setMouseGrabEnabled(bool grab)
     return true;
 }
 
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
 bool QWaylandWindow::setWindowStateInternal(Qt::WindowState state)
+#else
+bool QWaylandWindow::setWindowStateInternal(Qt::WindowStates state)
+#endif
 {
     if (mState == state) {
         return false;
@@ -835,6 +856,7 @@ bool QWaylandWindow::setWindowStateInternal(Qt::WindowState state)
 
     if (mShellSurface) {
         createDecoration();
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
         switch (state) {
             case Qt::WindowFullScreen:
                 mShellSurface->setFullscreen();
@@ -848,6 +870,16 @@ bool QWaylandWindow::setWindowStateInternal(Qt::WindowState state)
             default:
                 mShellSurface->setNormal();
         }
+#else
+        if (state.testFlag(Qt::WindowFullScreen))
+            mShellSurface->setFullscreen();
+        else if (state.testFlag(Qt::WindowMaximized))
+            mShellSurface->setMaximized();
+        else if (state.testFlag(Qt::WindowMinimized))
+            mShellSurface->setMinimized();
+        else
+            mShellSurface->setNormal();
+#endif
     }
 
     QWindowSystemInterface::handleWindowStateChanged(window(), mState);

@@ -65,7 +65,9 @@ public:
     QWaylandDrag(QWaylandDisplay *display);
     ~QWaylandDrag();
 
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
     QMimeData *platformDropData() Q_DECL_OVERRIDE;
+#endif
 
     void updateTarget(const QString &mimeType);
     void setResponse(const QPlatformDragQtResponse &response);
@@ -74,8 +76,13 @@ public:
 protected:
     void startDrag() Q_DECL_OVERRIDE;
     void cancel() Q_DECL_OVERRIDE;
+#if (QT_VERSION < QT_VERSION_CHECK(5,12,0))
     void move(const QPoint &globalPos) Q_DECL_OVERRIDE;
     void drop(const QPoint &globalpos) Q_DECL_OVERRIDE;
+#else
+    void move(const QPoint &globalPos, Qt::MouseButtons b, Qt::KeyboardModifiers mods) Q_DECL_OVERRIDE;
+    void drop(const QPoint &globalpos, Qt::MouseButtons b, Qt::KeyboardModifiers mods) Q_DECL_OVERRIDE;
+#endif
     void endDrag() Q_DECL_OVERRIDE;
 
 

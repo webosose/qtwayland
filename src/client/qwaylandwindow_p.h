@@ -134,14 +134,18 @@ public:
     QWaylandDisplay *display() const { return mDisplay; }
     QWaylandShellSurface *shellSurface() const;
     QWaylandSubSurface *subSurfaceWindow() const;
-    QWaylandScreen *screen() const { return mScreen; }
+    QWaylandScreen *waylandScreen() const;
 
     bool shellManagesActiveState() const;
 
     void handleContentOrientationChange(Qt::ScreenOrientation orientation) Q_DECL_OVERRIDE;
     void setOrientationMask(Qt::ScreenOrientations mask);
 
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
     void setWindowState(Qt::WindowState state) Q_DECL_OVERRIDE;
+#else
+    void setWindowState(Qt::WindowStates state) Q_DECL_OVERRIDE;
+#endif
     void setWindowFlags(Qt::WindowFlags flags) Q_DECL_OVERRIDE;
 
     void raise() Q_DECL_OVERRIDE;
@@ -198,7 +202,10 @@ public slots:
     void requestResize();
 
 protected:
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
     QWaylandScreen *mScreen;
+#endif
+
     QWaylandDisplay *mDisplay;
     QWaylandShellSurface *mShellSurface;
     QWaylandSubSurface *mSubSurfaceWindow;
@@ -227,13 +234,21 @@ protected:
 
     QIcon mWindowIcon;
 
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
     Qt::WindowState mState;
+#else
+    Qt::WindowStates mState;
+#endif
     QRegion mMask;
 
     QWaylandShmBackingStore *mBackingStore;
 
 private:
-    bool setWindowStateInternal(Qt::WindowState flags);
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
+    bool setWindowStateInternal(Qt::WindowState state);
+#else
+    bool setWindowStateInternal(Qt::WindowStates state);
+#endif
     void setGeometry_helper(const QRect &rect);
     void initWindow();
     bool shouldCreateShellSurface() const;

@@ -46,6 +46,9 @@
 //
 
 #include <QtGui/private/qdnd_p.h>
+#if (QT_VERSION > QT_VERSION_CHECK(5,10,0))
+#include <QtGui/private/qinternalmimedata_p.h>
+#endif
 
 #include <QtWaylandClient/private/qwaylandclientexport_p.h>
 #include <QtWaylandClient/private/qwayland-wayland.h>

@@ -56,12 +56,14 @@ QWaylandDrag::~QWaylandDrag()
 {
 }
 
+#if (QT_VERSION < QT_VERSION_CHECK(5,10,0))
 QMimeData * QWaylandDrag::platformDropData()
 {
     if (drag())
         return drag()->mimeData();
     return 0;
 }
+#endif
 
 void QWaylandDrag::startDrag()
 {
@@ -77,6 +79,7 @@ void QWaylandDrag::cancel()
     m_display->currentInputDevice()->dataDevice()->cancelDrag();
 }
 
+#if (QT_VERSION < QT_VERSION_CHECK(5,12,0))
 void QWaylandDrag::move(const QPoint &globalPos)
 {
     Q_UNUSED(globalPos);
@@ -88,6 +91,23 @@ void QWaylandDrag::drop(const QPoint &globalPos)
     Q_UNUSED(globalPos);
     // Do nothing
 }
+#else
+void QWaylandDrag::move(const QPoint &globalPos, Qt::MouseButtons b, Qt::KeyboardModifiers mods)
+{
+    Q_UNUSED(globalPos);
+    Q_UNUSED(b);
+    Q_UNUSED(mods);
+    // Do nothing
+}
+
+void QWaylandDrag::drop(const QPoint &globalPos, Qt::MouseButtons b, Qt::KeyboardModifiers mods)
+{
+    Q_UNUSED(globalPos);
+    Q_UNUSED(b);
+    Q_UNUSED(mods);
+    // Do nothing
+}
+#endif
 
 void QWaylandDrag::endDrag()
 {
