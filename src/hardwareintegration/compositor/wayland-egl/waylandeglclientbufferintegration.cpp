@@ -354,11 +354,10 @@ void WaylandEglClientBufferIntegration::destroyTextureForBuffer(struct ::wl_reso
     if (state.egl_stream != EGL_NO_STREAM_KHR)
         return;
 
-    // PLAT-73177: avoid a crash for accessing a broken texture
-    if (glIsTexture(state.gl_texture) != GL_FALSE)
+    if (state.gl_texture != 0) {
         glDeleteTextures(1, &state.gl_texture);
-
-    state.gl_texture = 0;
+        state.gl_texture = 0;
+    }
 }
 
 void WaylandEglClientBufferIntegration::bindTextureToBuffer(struct ::wl_resource *buffer)

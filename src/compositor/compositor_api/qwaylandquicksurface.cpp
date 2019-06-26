@@ -182,12 +182,12 @@ void QWaylandQuickSurface::updateTexture()
 
 void QWaylandQuickSurface::bindWindow(QQuickWindow *window)
 {
-    if (m_window != window) {
+    //Do nothing if window is null.
+    //In current design, surface should be connected to window despite of item
+    if (window && m_window != window) {
         if (m_window) {
             disconnect(m_window, &QQuickWindow::beforeSynchronizing, this, &QWaylandQuickSurface::updateTexture);
             disconnect(m_window, &QQuickWindow::sceneGraphInvalidated, this, &QWaylandQuickSurface::invalidateTexture);
-            // Release buffer for sure
-            invalidateTexture();
         }
         m_window = window;
         if (m_window) {
