@@ -88,7 +88,7 @@ public:
         delete t;
         t = 0;
 
-        if (m_ref) {
+        if (m_ref && surfaceItem->window()) {
             if (m_ref.isShm()) {
                 t = surfaceItem->window()->createTextureFromImage(m_ref.image());
             } else {
@@ -503,6 +503,12 @@ void QWaylandSurfaceItem::bindWindow(QQuickWindow *window)
 {
     //This will not happen
     if (m_window == window)
+        return;
+
+    //Do nothing if new window is null, namely item is detached from window.
+    //In current design, item should be connected to window so that
+    //related surface handles requests from client, including to send buffer_release.
+    if (!window)
         return;
 
     if (m_window) {
