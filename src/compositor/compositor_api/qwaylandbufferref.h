@@ -58,6 +58,7 @@ public:
     ~QWaylandBufferRef();
 
     QWaylandBufferRef &operator=(const QWaylandBufferRef &ref);
+    bool operator==(const QWaylandBufferRef &ref);
     operator bool() const;
     bool isShm() const;
 

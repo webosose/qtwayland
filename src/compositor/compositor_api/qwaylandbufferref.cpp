@@ -85,6 +85,11 @@ QWaylandBufferRef &QWaylandBufferRef::operator=(const QWaylandBufferRef &ref)
     return *this;
 }
 
+bool QWaylandBufferRef::operator==(const QWaylandBufferRef &ref)
+{
+    return d->buffer == ref.d->buffer;
+}
+
 QWaylandBufferRef::operator bool() const
 {
     return d->buffer && d->buffer->waylandBufferHandle();

@@ -52,6 +52,9 @@
 
 #include <QtCore/QMutexLocker>
 #include <QtCore/QMutex>
+#include <QtCore/QRunnable>
+
+#include <QThread>
 
 QT_BEGIN_NAMESPACE
 
@@ -61,6 +64,11 @@ class QWaylandSurfaceTextureProvider : public QSGTextureProvider
 {
 public:
     QWaylandSurfaceTextureProvider() : t(0) { }
+    ~QWaylandSurfaceTextureProvider() {
+        delete t;
+        t = 0;
+        m_ref = QWaylandBufferRef();
+    }
 
     QSGTexture *texture() const Q_DECL_OVERRIDE
     {
@@ -69,9 +77,49 @@ public:
         return t;
     }
 
+    void setBufferRef(QWaylandSurfaceItem *surfaceItem, const QWaylandBufferRef &buffer)
+    {
+        Q_ASSERT(QThread::currentThread() == thread());
+
+        if (m_ref == buffer)
+            return;
+
+        m_ref = buffer;
+        delete t;
+        t = 0;
+
+        if (m_ref) {
+            if (m_ref.isShm()) {
+                t = surfaceItem->window()->createTextureFromImage(m_ref.image());
+            } else {
+                QQuickWindow::CreateTextureOptions opt = 0;
+                QWaylandQuickSurface *surface = static_cast<QWaylandQuickSurface *>(surfaceItem->surface());
+                if (surface && surface->useTextureAlpha()) {
+                    opt |= QQuickWindow::TextureHasAlphaChannel;
+                }
+                t = surfaceItem->window()->createTextureFromId(m_ref.createTexture(), surface->size(), opt);
+            }
+            t->bind();
+        }
+    }
+
     bool smooth;
     QSGTexture *t;
+    QWaylandBufferRef m_ref;
 };
+
+class QWaylandSurfaceItemCleanup : public QRunnable
+{
+public:
+    QWaylandSurfaceItemCleanup(QWaylandSurfaceTextureProvider *p)
+        : provider(p)
+    {}
+    void run() override {
+        delete provider;
+    }
+    QWaylandSurfaceTextureProvider *provider;
+};
+
 
 QWaylandSurfaceItem::QWaylandSurfaceItem(QWaylandQuickSurface *surface, QQuickItem *parent)
     : QQuickItem(parent)
@@ -81,7 +129,7 @@ QWaylandSurfaceItem::QWaylandSurfaceItem(QWaylandQuickSurface *surface, QQuickIt
     , m_touchEventsEnabled(false)
     , m_resizeSurfaceToItem(false)
     , m_newTexture(false)
-
+    , m_window(nullptr)
 {
     if (!mutex)
         mutex = new QMutex;
@@ -112,7 +160,7 @@ QWaylandSurfaceItem::QWaylandSurfaceItem(QWaylandQuickSurface *surface, QQuickIt
         connect(surface, &QWaylandSurface::configure, this, &QWaylandSurfaceItem::updateBuffer);
         connect(surface, &QWaylandSurface::redraw, this, &QQuickItem::update);
 
-        connect(this, &QQuickItem::windowChanged, surface, &QWaylandQuickSurface::bindWindow);
+        connect(this, &QQuickItem::windowChanged, this, &QWaylandSurfaceItem::bindWindow);
     }
     connect(this, &QWaylandSurfaceItem::widthChanged, this, &QWaylandSurfaceItem::updateSurfaceSize);
     connect(this, &QWaylandSurfaceItem::heightChanged, this, &QWaylandSurfaceItem::updateSurfaceSize);
@@ -126,6 +174,24 @@ QWaylandSurfaceItem::~QWaylandSurfaceItem()
     QMutexLocker locker(mutex);
     if (m_provider)
         m_provider->deleteLater();
+}
+
+//This is called when the item is deref from window or suface is released.
+void QWaylandSurfaceItem::releaseResources()
+{
+    if (m_provider) {
+        window()->scheduleRenderJob(new QWaylandSurfaceItemCleanup(m_provider),
+                                    QQuickWindow::AfterSynchronizingStage);
+        m_provider = nullptr;
+    }
+}
+
+void QWaylandSurfaceItem::invalidateTexture()
+{
+    if (m_provider) {
+        delete m_provider;
+        m_provider = nullptr;
+    }
 }
 
 bool QWaylandSurfaceItem::isYInverted() const
@@ -359,7 +425,7 @@ void QWaylandSurfaceItem::updateBuffer(bool hasBuffer)
     m_newTexture = true;
 }
 
-void QWaylandSurfaceItem::updateTexture()
+void QWaylandSurfaceItem::beforeSync()
 {
     updateTexture(false);
 }
@@ -368,17 +434,24 @@ void QWaylandSurfaceItem::updateTexture(bool changed)
 {
     Q_UNUSED(changed);
 
+    QWaylandQuickSurface *sf = static_cast<QWaylandQuickSurface *>(surface());
+    if (!sf) {
+        releaseResources();
+        return;
+    }
+
     if (!m_provider)
         m_provider = new QWaylandSurfaceTextureProvider();
 
     m_provider->smooth = smooth();
+    QSGTexture *old = m_provider->t;
+    sf->advance();
+    // 5.12 Style, the provider will hold the buffer reference to keep the texture valid
+    m_provider->setBufferRef(this, sf->currentBuffer());
 
-    QWaylandQuickSurface *s = static_cast<QWaylandQuickSurface *>(surface());
-    QSGTexture *t = s ? s->texture() : NULL;
-    if (m_newTexture || t != m_provider->t) {
-        m_provider->t = t;
+    if (m_newTexture || old != m_provider->t)
         emit m_provider->textureChanged();
-    }
+
     m_newTexture = false;
 }
 
@@ -423,6 +496,25 @@ void QWaylandSurfaceItem::setResizeSurfaceToItem(bool enabled)
     if (m_resizeSurfaceToItem != enabled) {
         m_resizeSurfaceToItem = enabled;
         emit resizeSurfaceToItemChanged();
+    }
+}
+
+void QWaylandSurfaceItem::bindWindow(QQuickWindow *window)
+{
+    //This will not happen
+    if (m_window == window)
+        return;
+
+    if (m_window) {
+        disconnect(m_window, &QQuickWindow::beforeSynchronizing, this, &QWaylandSurfaceItem::beforeSync);
+        disconnect(m_window, &QQuickWindow::sceneGraphInvalidated, this, &QWaylandSurfaceItem::invalidateTexture);
+    }
+
+    m_window = window;
+
+    if (m_window) {
+        connect(m_window, &QQuickWindow::beforeSynchronizing, this, &QWaylandSurfaceItem::beforeSync, Qt::DirectConnection);
+        connect(m_window, &QQuickWindow::sceneGraphInvalidated, this, &QWaylandSurfaceItem::invalidateTexture, Qt::DirectConnection);
     }
 }
 

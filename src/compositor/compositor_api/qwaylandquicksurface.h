@@ -61,8 +61,6 @@ public:
     QWaylandQuickSurface(wl_client *client, quint32 id, int version, QWaylandQuickCompositor *compositor);
     ~QWaylandQuickSurface();
 
-    QSGTexture *texture() const;
-
     bool useTextureAlpha() const;
     void setUseTextureAlpha(bool useTextureAlpha);
 
@@ -74,20 +72,12 @@ public:
     QWaylandSurfaceItem *surfaceItem();
     QWaylandTextureBufferAttacher *textureBufferAttacher() const;
 
-    void updateTexture();
-    void invalidateTexture();
-
-private:
-    bool event(QEvent *event) Q_DECL_OVERRIDE;
-public slots:
-    void bindWindow(QQuickWindow *window);
+    void advance();
+    QWaylandBufferRef currentBuffer() const;
 
 Q_SIGNALS:
     void useTextureAlphaChanged();
     void clientRenderingEnabledChanged();
-
-private:
-    QQuickWindow *m_window;
 };
 
 QT_END_NAMESPACE

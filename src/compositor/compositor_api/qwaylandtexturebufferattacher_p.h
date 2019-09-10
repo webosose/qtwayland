@@ -34,6 +34,8 @@
 #ifndef QWAYLANDTEXTUREBUFFERATTACHER_H
 #define QWAYLANDTEXTUREBUFFERATTACHER_H
 
+#include <QMutex>
+
 #include <QtCompositor/qwaylandsurface.h>
 #include <QtCompositor/qwaylandbufferref.h>
 
@@ -51,20 +53,21 @@ public:
     void updateTexture();
     void invalidateTexture();
 
-    bool isDirty() const { return m_update; }
-    QSGTexture* texture() const { return m_texture; }
-    QWaylandBufferRef currentBuffer() const { return m_buffer; }
+    bool isDirty();
+    QWaylandBufferRef currentBuffer();
+    void advance();
 
 protected:
     virtual void attach(const QWaylandBufferRef &ref) Q_DECL_OVERRIDE;
     virtual void unmap();
 
     QWaylandQuickSurface *m_surface;
-    QSGTexture *m_texture;
 
     QWaylandBufferRef m_buffer;
     QWaylandBufferRef m_nextBuffer;
     bool m_update;
+
+    QMutex bufferMutex;
 };
 
 QT_END_NAMESPACE

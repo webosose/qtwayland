@@ -42,15 +42,12 @@
 
 QWaylandTextureBufferAttacher::QWaylandTextureBufferAttacher(QWaylandQuickSurface *surface)
     : m_surface(surface)
-    , m_texture(0)
     , m_update(false)
 {
 }
 
 QWaylandTextureBufferAttacher::~QWaylandTextureBufferAttacher()
 {
-    if (m_texture)
-        m_texture->deleteLater();
     m_buffer = QWaylandBufferRef();
     m_nextBuffer = QWaylandBufferRef();
 }
@@ -61,30 +58,11 @@ void QWaylandTextureBufferAttacher::attach(const QWaylandBufferRef &ref)
     m_update = true;
 }
 
-void QWaylandTextureBufferAttacher::updateTexture()
+void QWaylandTextureBufferAttacher::advance()
 {
+    QMutexLocker locker(&bufferMutex);
     m_buffer = m_nextBuffer;
-    delete m_texture;
-    m_texture = 0;
-
-    QWaylandOutput *output = m_surface->compositor()->primaryOutput();
-    if (!output)
-        return;
-
-    QQuickWindow *window = static_cast<QQuickWindow *>(output->window());
-    if (m_nextBuffer) {
-        if (m_buffer.isShm()) {
-            m_texture = window->createTextureFromImage(m_buffer.image());
-        } else {
-            QQuickWindow::CreateTextureOptions opt = 0;
-            if (m_surface->useTextureAlpha()) {
-                opt |= QQuickWindow::TextureHasAlphaChannel;
-            }
-            m_texture = window->createTextureFromId(m_buffer.createTexture(), m_surface->size(), opt);
-        }
-        m_texture->bind();
-    }
-
+    m_nextBuffer = QWaylandBufferRef();
     m_update = false;
 }
 
@@ -94,13 +72,14 @@ void QWaylandTextureBufferAttacher::unmap()
     m_update = true;
 }
 
-void QWaylandTextureBufferAttacher::invalidateTexture()
+bool QWaylandTextureBufferAttacher::isDirty()
 {
-    if (m_buffer)
-        m_buffer.destroyTexture();
-    delete m_texture;
-    m_texture = 0;
-    m_update = true;
-    m_buffer = QWaylandBufferRef();
+    QMutexLocker locker(&bufferMutex);
+    return m_update;
 }
 
+QWaylandBufferRef QWaylandTextureBufferAttacher::currentBuffer()
+{
+    QMutexLocker locker(&bufferMutex);
+    return m_buffer;
+}

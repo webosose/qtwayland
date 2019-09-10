@@ -80,13 +80,14 @@ public:
     bool paintEnabled() const;
     bool touchEventsEnabled() const { return m_touchEventsEnabled; }
     bool resizeSurfaceToItem() const { return m_resizeSurfaceToItem; }
-    void updateTexture();
 
     void setTouchEventsEnabled(bool enabled);
     void setResizeSurfaceToItem(bool enabled);
 
     void setPos(const QPointF &pos) Q_DECL_OVERRIDE;
     QPointF pos() const Q_DECL_OVERRIDE;
+
+    void releaseResources() override;
 
 protected:
     void mousePressEvent(QMouseEvent *event);
@@ -113,6 +114,9 @@ private Q_SLOTS:
     void updateSize();
     void updateSurfaceSize();
     void updateBuffer(bool hasBuffer);
+    void bindWindow(QQuickWindow *window);
+    void beforeSync();
+    void invalidateTexture();
 
 Q_SIGNALS:
     void touchEventsEnabledChanged();
@@ -137,6 +141,8 @@ private:
     bool m_yInverted;
     bool m_resizeSurfaceToItem;
     bool m_newTexture;
+
+    QQuickWindow *m_window;
 };
 
 QT_END_NAMESPACE
