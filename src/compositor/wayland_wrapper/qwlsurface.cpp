@@ -405,6 +405,20 @@ void Surface::removeUnmapLock(QWaylandUnmapLock *l)
 SurfaceBuffer *Surface::createSurfaceBuffer(struct ::wl_resource *buffer)
 {
     SurfaceBuffer *newBuffer = 0;
+
+    // Duplication check for wayland buffer
+    for (int i = 0; i < m_bufferPool.size(); i++) {
+        SurfaceBuffer *sBuffer = m_bufferPool[i];
+        if (!sBuffer->isRegisteredWithBuffer())
+            continue;
+        if (!sBuffer->waylandBufferHandle())
+            continue;
+        if (sBuffer->waylandBufferHandle() == buffer) {
+            qWarning() << buffer << "is used again, ignore it";
+            return nullptr;
+        }
+    }
+
     for (int i = 0; i < m_bufferPool.size(); i++) {
         if (!m_bufferPool[i]->isRegisteredWithBuffer()) {
             newBuffer = m_bufferPool[i];
@@ -459,6 +473,9 @@ void Surface::surface_attach(Resource *, struct wl_resource *buffer, int x, int 
     if (m_pending.buffer)
         m_pending.buffer->disown();
     m_pending.buffer = createSurfaceBuffer(buffer);
+    if (!m_pending.buffer)
+        return;
+
     m_pending.offset = QPoint(x, y);
     m_pending.newlyAttached = true;
 }
