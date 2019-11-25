@@ -255,10 +255,14 @@ void QWaylandIntegration::initialize()
     QSocketNotifier *sn = new QSocketNotifier(fd, QSocketNotifier::Read, mDisplay.data());
     QObject::connect(sn, SIGNAL(activated(int)), mDisplay.data(), SLOT(flushRequests()));
 
+#ifdef NO_WEBOS_PLATFORM
     if (mDisplay->screens().isEmpty()) {
         qWarning() << "Running on a compositor with no screens is not supported";
         ::exit(EXIT_FAILURE);
     }
+#else
+    // In webOS, there is a case where the display has no screen at the beginning
+#endif
 }
 
 QPlatformFontDatabase *QWaylandIntegration::fontDatabase() const
