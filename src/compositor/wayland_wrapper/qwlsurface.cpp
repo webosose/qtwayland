@@ -407,15 +407,18 @@ SurfaceBuffer *Surface::createSurfaceBuffer(struct ::wl_resource *buffer)
     SurfaceBuffer *newBuffer = 0;
 
     // Duplication check for wayland buffer
-    for (int i = 0; i < m_bufferPool.size(); i++) {
-        SurfaceBuffer *sBuffer = m_bufferPool[i];
-        if (!sBuffer->isRegisteredWithBuffer())
-            continue;
-        if (!sBuffer->waylandBufferHandle())
-            continue;
-        if (sBuffer->waylandBufferHandle() == buffer) {
-            qWarning() << buffer << "is used again, ignore it";
-            return nullptr;
+    // unless this is a cursor surface.
+    if (!m_isCursorSurface) {
+        for (int i = 0; i < m_bufferPool.size(); i++) {
+            SurfaceBuffer *sBuffer = m_bufferPool[i];
+            if (!sBuffer->isRegisteredWithBuffer())
+                continue;
+            if (!sBuffer->waylandBufferHandle())
+                continue;
+            if (sBuffer->waylandBufferHandle() == buffer) {
+                qWarning() << buffer << "is used again, ignore it";
+                return nullptr;
+            }
         }
     }
 
