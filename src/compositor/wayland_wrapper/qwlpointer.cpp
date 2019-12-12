@@ -267,6 +267,33 @@ void Pointer::sendMouseReleaseEvent(Qt::MouseButton button, const QPointF &local
         m_grabSerial = wl_display_get_serial(m_compositor->wl_display());
 }
 
+// Method for sending button event only without motion event
+void Pointer::sendMousePressEvent(Qt::MouseButton button)
+{
+    uint32_t time = m_compositor->currentTimeMsecs();
+    if (m_buttonCount == 0) {
+        m_grabButton = button;
+        m_grabTime = time;
+    }
+    m_buttonCount++;
+    m_grab->button(time, button, WL_POINTER_BUTTON_STATE_PRESSED);
+
+    if (m_buttonCount == 1)
+        m_grabSerial = wl_display_get_serial(m_compositor->wl_display());
+}
+
+// Method for sending button event only without motion event
+void Pointer::sendMouseReleaseEvent(Qt::MouseButton button)
+{
+    uint32_t time = m_compositor->currentTimeMsecs();
+    if (m_buttonCount > 0)
+        m_buttonCount--;
+    m_grab->button(time, button, WL_POINTER_BUTTON_STATE_RELEASED);
+
+    if (m_buttonCount == 1)
+        m_grabSerial = wl_display_get_serial(m_compositor->wl_display());
+}
+
 void Pointer::sendMouseMoveEvent(const QPointF &localPos, const QPointF &globalPos)
 {
     uint32_t time = m_compositor->currentTimeMsecs();

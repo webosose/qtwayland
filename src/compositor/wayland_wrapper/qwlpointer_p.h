@@ -108,6 +108,11 @@ public:
 
     void sendMousePressEvent(Qt::MouseButton button, const QPointF &localPos, const QPointF &globalPos);
     void sendMouseReleaseEvent(Qt::MouseButton button, const QPointF &localPos, const QPointF &globalPos);
+
+    // Methods for sending button event only without motion event
+    void sendMousePressEvent(Qt::MouseButton button);
+    void sendMouseReleaseEvent(Qt::MouseButton button);
+
     void sendMouseMoveEvent(const QPointF &localPos, const QPointF &globalPos);
     void sendMouseWheelEvent(Qt::Orientation orientation, int delta);
 
