@@ -179,6 +179,11 @@ QWaylandSurfaceItem::~QWaylandSurfaceItem()
 //This is called when the item is deref from window or suface is released.
 void QWaylandSurfaceItem::releaseResources()
 {
+    if (!window()) {
+        invalidateTexture();
+        return;
+    }
+
     if (m_provider) {
         window()->scheduleRenderJob(new QWaylandSurfaceItemCleanup(m_provider),
                                     QQuickWindow::AfterSynchronizingStage);
