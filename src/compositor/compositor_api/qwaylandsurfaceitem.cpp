@@ -442,6 +442,8 @@ void QWaylandSurfaceItem::updateTexture(bool changed)
     QWaylandQuickSurface *sf = static_cast<QWaylandQuickSurface *>(surface());
     if (!sf) {
         releaseResources();
+        //For triggering updatePaintNode so that invalidate old scengraph node
+        update();
         return;
     }
 
