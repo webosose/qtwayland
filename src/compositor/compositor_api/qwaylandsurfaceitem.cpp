@@ -94,12 +94,14 @@ public:
             } else {
                 QQuickWindow::CreateTextureOptions opt = 0;
                 QWaylandQuickSurface *surface = static_cast<QWaylandQuickSurface *>(surfaceItem->surface());
-                if (surface && surface->useTextureAlpha()) {
-                    opt |= QQuickWindow::TextureHasAlphaChannel;
+                if (surface) {
+                    if (surface->useTextureAlpha())
+                        opt |= QQuickWindow::TextureHasAlphaChannel;
+                    t = surfaceItem->window()->createTextureFromId(m_ref.createTexture(), surface->size(), opt);
                 }
-                t = surfaceItem->window()->createTextureFromId(m_ref.createTexture(), surface->size(), opt);
             }
-            t->bind();
+            if (t)
+                t->bind();
         }
     }
 
