@@ -81,7 +81,7 @@ public:
     {
         Q_ASSERT(QThread::currentThread() == thread());
 
-        if (m_ref == buffer)
+        if (m_ref == buffer && t)
             return;
 
         m_ref = buffer;
