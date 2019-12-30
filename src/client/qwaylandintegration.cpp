@@ -165,7 +165,7 @@ void QWaylandIntegration::initIntegration()
     if (!mClipboard)
         mClipboard = new QWaylandClipboard(mDisplay);
     if (!mDrag)
-        mDrag = createPlatformDrag(mDisplay);
+        mDrag = QWaylandIntegration::createPlatformDrag(mDisplay);
 #endif
     if (!mInputContext) {
         QString icStr = QPlatformInputContextFactory::requested();
@@ -174,7 +174,7 @@ void QWaylandIntegration::initIntegration()
     }
 #ifndef QT_NO_ACCESSIBILITY
     if (!mAccessibility)
-        mAccessibility = createPlatformAccessibility();
+        mAccessibility = QWaylandIntegration::createPlatformAccessibility();
 #endif
 }
 
