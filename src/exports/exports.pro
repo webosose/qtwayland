@@ -1,2 +1,2 @@
 TEMPLATE = subdirs
-SUBDIRS += shellintegration
+SUBDIRS += hardwareintegration shellintegration

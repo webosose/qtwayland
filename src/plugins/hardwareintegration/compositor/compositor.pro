@@ -1,10 +1,9 @@
 TEMPLATE = subdirs
 QT_FOR_CONFIG += waylandcompositor-private
 
-qtConfig(wayland-egl): \
-    SUBDIRS += wayland-egl
-
 config_no_webos {
+    qtConfig(wayland-egl): \
+        SUBDIRS += wayland-egl
     qtConfig(wayland-brcm): \
         SUBDIRS += brcm-egl
     qtConfig(xcomposite-egl): \

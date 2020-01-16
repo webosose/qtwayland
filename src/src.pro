@@ -33,6 +33,6 @@ qtConfig(wayland-client) {
 
 # Exports for webOS
 sub_exports.subdir = exports
-sub_exports.depends += sub_client
+sub_exports.depends += sub_client sub-compositor
 sub_exports.target = sub-exports
 SUBDIRS += sub_exports
