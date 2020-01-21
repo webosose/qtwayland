@@ -1327,6 +1327,12 @@ QSGNode *QWaylandQuickItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeDat
     } else {
         Q_ASSERT(!d->provider);
 
+        //TODO: In somecase, bufferTypes might be changed.
+        if (d->provider) {
+           delete oldNode;
+           oldNode = nullptr;
+        }
+
         QSGGeometryNode *node = static_cast<QSGGeometryNode *>(oldNode);
 
         if (!node) {

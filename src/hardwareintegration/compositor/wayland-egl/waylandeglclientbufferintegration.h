@@ -69,6 +69,7 @@ struct BufferState;
 class WaylandEglClientBuffer : public QtWayland::ClientBuffer
 {
 public:
+    WaylandEglClientBuffer(WaylandEglClientBufferIntegration* integration, wl_resource *bufferResource);
     ~WaylandEglClientBuffer() override;
 
     QWaylandBufferRef::BufferFormatEgl bufferFormatEgl() const override;
@@ -82,8 +83,6 @@ public:
 private:
     friend class WaylandEglClientBufferIntegration;
     friend class WaylandEglClientBufferIntegrationPrivate;
-
-    WaylandEglClientBuffer(WaylandEglClientBufferIntegration* integration, wl_resource *bufferResource);
 
     BufferState *d = nullptr;
     WaylandEglClientBufferIntegration *m_integration = nullptr;
