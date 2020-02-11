@@ -89,6 +89,12 @@ QWaylandWindow::QWaylandWindow(QWindow *window)
     mWindowId = id++;
     connect(qApp, &QGuiApplication::screenRemoved, this, &QWaylandWindow::handleScreenRemoved);
     initializeWlSurface();
+
+#ifndef NO_WEBOS_PLATFORM
+    // In webOS, platform window initialization should be done upon construction
+    initWindow();
+    mDisplay->flushRequests();
+#endif
 }
 
 QWaylandWindow::~QWaylandWindow()
@@ -401,8 +407,12 @@ void QWaylandWindow::setVisible(bool visible)
     if (visible) {
         if (window()->type() == Qt::Popup || window()->type() == Qt::ToolTip)
             activePopups << this;
+#ifdef NO_WEBOS_PLATFORM
         initWindow();
         mDisplay->flushRequests();
+#else
+        // In webOS, we don't recreate window when it becomes visible
+#endif
 
         setGeometry(window()->geometry());
         // Don't flush the events here, or else the newly visible window may start drawing, but since
@@ -412,7 +422,20 @@ void QWaylandWindow::setVisible(bool visible)
         sendExposeEvent(QRect());
         if (window()->type() == Qt::Popup)
             closePopups(this);
+#ifdef NO_WEBOS_PLATFORM
         reset();
+#else
+        // In webOS, hide the window from the compositor by attaching a null buffer
+        // instead of destroying its resources
+        QPointer<QWaylandWindow> deleteGuard(this);
+        QWindowSystemInterface::flushWindowSystemEvents();
+        if (!deleteGuard.isNull())
+            // Delay hiding window if waiting for the frame callback (See QWaylandWindow::handleFrameCallback())
+            if (!mWaitingForFrameCallback) {
+                attach(static_cast<QWaylandBuffer *>(0), 0, 0);
+                wl_surface::commit();
+            }
+#endif
     }
 }
 
@@ -639,6 +662,14 @@ void QWaylandWindow::handleFrameCallback()
         sendExposeEvent(QRect(QPoint(), geometry().size()));
     if (wasExposed && hasPendingUpdateRequest())
         deliverUpdateRequest();
+
+#ifndef NO_WEBOS_PLATFORM
+    // In webOS, send a null buffer if the window is invisible
+    if (!window()->isVisible()) {
+        attach(static_cast<QWaylandBuffer *>(0), 0, 0);
+        wl_surface::commit();
+    }
+#endif
 }
 
 QMutex QWaylandWindow::mFrameSyncMutex;
