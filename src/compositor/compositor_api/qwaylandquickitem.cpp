@@ -63,6 +63,7 @@
 
 #include <QtCore/QMutexLocker>
 #include <QtCore/QMutex>
+#include <QtCore/QRunnable>
 
 #include <wayland-server.h>
 #include <QThread>
@@ -313,6 +314,18 @@ private:
     bool m_smooth = false;
     QSGTexture *m_sgTex = nullptr;
     QWaylandBufferRef m_ref;
+};
+
+class QWaylandQuickItemCleanup : public QRunnable
+{
+public:
+    QWaylandQuickItemCleanup(QWaylandSurfaceTextureProvider *p)
+        : provider(p)
+    {}
+    void run() override {
+        delete provider;
+    }
+    QWaylandSurfaceTextureProvider *provider = nullptr;
 };
 
 /*!
@@ -1180,6 +1193,14 @@ void QWaylandQuickItem::updateWindow()
     if (d->connectedWindow) {
         disconnect(d->connectedWindow, &QQuickWindow::beforeSynchronizing, this, &QWaylandQuickItem::beforeSync);
         disconnect(d->connectedWindow, &QQuickWindow::screenChanged, this, &QWaylandQuickItem::updateSize);
+    }
+
+    if (!newWindow) {
+        // Release current buffer and it will not be set since advance() is not called anymore.
+        d->view->discardCurrentBuffer();
+        // one shot task to clean up the provider with buffer reference
+        d->connectedWindow->scheduleRenderJob(new QWaylandQuickItemCleanup(d->provider), QQuickWindow::AfterSwapStage);
+        d->provider = nullptr;
     }
 
     d->connectedWindow = newWindow;
