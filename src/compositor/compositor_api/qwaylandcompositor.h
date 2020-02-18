@@ -1,38 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,11 +40,14 @@
 #ifndef QWAYLANDCOMPOSITOR_H
 #define QWAYLANDCOMPOSITOR_H
 
-#include <QtCompositor/qwaylandexport.h>
+#include <QtWaylandCompositor/qtwaylandcompositorglobal.h>
+#include <QtWaylandCompositor/qwaylandcompositorextension.h>
+#include <QtWaylandCompositor/QWaylandOutput>
 
 #include <QObject>
 #include <QImage>
 #include <QRect>
+#include <QLoggingCategory>
 
 struct wl_display;
 
@@ -56,127 +58,106 @@ class QInputEvent;
 class QMimeData;
 class QUrl;
 class QOpenGLContext;
+class QWaylandCompositorPrivate;
 class QWaylandClient;
 class QWaylandSurface;
-class QWaylandInputDevice;
-class QWaylandInputPanel;
-class QWaylandDrag;
+class QWaylandSeat;
 class QWaylandGlobalInterface;
-class QWaylandSurfaceView;
-class QWaylandOutput;
-class wl_client;
+class QWaylandView;
+class QWaylandPointer;
+class QWaylandKeyboard;
+class QWaylandTouch;
+class QWaylandSurfaceGrabber;
+class QWaylandBufferRef;
 
-namespace QtWayland
-{
-    class Compositor;
-}
+Q_WAYLAND_COMPOSITOR_EXPORT Q_DECLARE_LOGGING_CATEGORY(qLcWaylandCompositor)
+Q_WAYLAND_COMPOSITOR_EXPORT Q_DECLARE_LOGGING_CATEGORY(qLcWaylandCompositorHardwareIntegration)
+Q_DECLARE_LOGGING_CATEGORY(qLcWaylandCompositorInputMethods)
 
-class Q_COMPOSITOR_EXPORT QWaylandCompositor
+class Q_WAYLAND_COMPOSITOR_EXPORT QWaylandCompositor : public QWaylandObject
 {
+    Q_OBJECT
+    Q_DECLARE_PRIVATE(QWaylandCompositor)
+    Q_PROPERTY(QByteArray socketName READ socketName WRITE setSocketName NOTIFY socketNameChanged)
+    Q_PROPERTY(bool created READ isCreated NOTIFY createdChanged)
+    Q_PROPERTY(bool retainedSelection READ retainedSelectionEnabled WRITE setRetainedSelectionEnabled NOTIFY retainedSelectionChanged)
+    Q_PROPERTY(QWaylandOutput *defaultOutput READ defaultOutput WRITE setDefaultOutput NOTIFY defaultOutputChanged)
+    Q_PROPERTY(bool useHardwareIntegrationExtension READ useHardwareIntegrationExtension WRITE setUseHardwareIntegrationExtension NOTIFY useHardwareIntegrationExtensionChanged)
+    Q_PROPERTY(QWaylandSeat *defaultSeat READ defaultSeat NOTIFY defaultSeatChanged)
+
 public:
-    enum ExtensionFlag {
-        WindowManagerExtension = 0x01,
-        SurfaceExtension = 0x02,
-        QtKeyExtension = 0x04,
-        TouchExtension = 0x08,
-        SubSurfaceExtension = 0x10,
-        TextInputExtension = 0x20,
-        HardwareIntegrationExtension = 0x40,
+    QWaylandCompositor(QObject *parent = nullptr);
+    ~QWaylandCompositor() override;
 
-        DefaultExtensions = WindowManagerExtension | SurfaceExtension | QtKeyExtension | TouchExtension | HardwareIntegrationExtension
-    };
-    Q_DECLARE_FLAGS(ExtensionFlags, ExtensionFlag)
+    virtual void create();
+    bool isCreated() const;
 
-    QWaylandCompositor(const char *socketName = Q_NULLPTR, ExtensionFlags extensions = DefaultExtensions);
-    virtual ~QWaylandCompositor();
+    void setSocketName(const QByteArray &name);
+    QByteArray socketName() const;
 
-    void addGlobalInterface(QWaylandGlobalInterface *interface);
-    void addDefaultShell();
-    ::wl_display *waylandDisplay() const;
+    Q_INVOKABLE void addSocketDescriptor(int fd);
 
-    void frameStarted();
-    void sendFrameCallbacks(QList<QWaylandSurface *> visibleSurfaces);
+    ::wl_display *display() const;
+    uint32_t nextSerial();
 
-    void destroyClientForSurface(QWaylandSurface *surface);
-    void destroyClient(QWaylandClient *client);
+    QList<QWaylandClient *>clients() const;
+    Q_INVOKABLE void destroyClientForSurface(QWaylandSurface *surface);
+    Q_INVOKABLE void destroyClient(QWaylandClient *client);
 
-    QList<QWaylandSurface *> surfacesForClient(QWaylandClient* client) const;
     QList<QWaylandSurface *> surfaces() const;
+    QList<QWaylandSurface *> surfacesForClient(QWaylandClient* client) const;
 
+    Q_INVOKABLE QWaylandOutput *outputFor(QWindow *window) const;
+
+    QWaylandOutput *defaultOutput() const;
+    void setDefaultOutput(QWaylandOutput *output);
     QList<QWaylandOutput *> outputs() const;
-    QWaylandOutput *output(QWindow *window);
 
-    QWaylandOutput *primaryOutput() const;
-    void setPrimaryOutput(QWaylandOutput *output);
-
-    qreal devicePixelRatio() const;
-
-    virtual void surfaceCreated(QWaylandSurface *surface) = 0;
-    virtual void surfaceAboutToBeDestroyed(QWaylandSurface *surface);
-
-    virtual QWaylandSurfaceView *pickView(const QPointF &globalPosition) const;
-    virtual QPointF mapToView(QWaylandSurfaceView *view, const QPointF &surfacePosition) const;
-
-    virtual bool openUrl(QWaylandClient *client, const QUrl &url);
-
-    QtWayland::Compositor *handle() const;
+    uint currentTimeMsecs() const;
 
     void setRetainedSelectionEnabled(bool enabled);
     bool retainedSelectionEnabled() const;
     void overrideSelection(const QMimeData *data);
 
-    void setClientFullScreenHint(bool value);
+    QWaylandSeat *defaultSeat() const;
 
-    const char *socketName() const;
+    QWaylandSeat *seatFor(QInputEvent *inputEvent);
 
-#if QT_DEPRECATED_SINCE(5, 5)
-    void setScreenOrientation(Qt::ScreenOrientation orientation);
-    void setScreenOrientation(QWaylandOutput *output, Qt::ScreenOrientation orientation);
+    bool useHardwareIntegrationExtension() const;
+    void setUseHardwareIntegrationExtension(bool use);
 
-    void setOutputGeometry(const QRect &outputGeometry);
-    QRect outputGeometry() const;
+    virtual void grabSurface(QWaylandSurfaceGrabber *grabber, const QWaylandBufferRef &buffer);
 
-    void setOutputRefreshRate(int refreshRate);
-    int outputRefreshRate() const;
-#endif
+public Q_SLOTS:
+    void processWaylandEvents();
 
-    QWaylandInputDevice *defaultInputDevice() const;
+Q_SIGNALS:
+    void createdChanged();
+    void socketNameChanged(const QByteArray &socketName);
+    void retainedSelectionChanged(bool retainedSelection);
 
-    QWaylandInputPanel *inputPanel() const;
-    QWaylandDrag *drag() const;
+    void surfaceRequested(QWaylandClient *client, uint id, int version);
+    void surfaceCreated(QWaylandSurface *surface);
+    void surfaceAboutToBeDestroyed(QWaylandSurface *surface);
+    void subsurfaceChanged(QWaylandSurface *child, QWaylandSurface *parent);
 
-    bool isDragging() const;
-    void sendDragMoveEvent(const QPoint &global, const QPoint &local, QWaylandSurface *surface);
-    void sendDragEndEvent();
+    void defaultOutputChanged();
+    void defaultSeatChanged(QWaylandSeat *newDevice, QWaylandSeat *oldDevice);
 
-    virtual void setCursorSurface(QWaylandSurface *surface, int hotspotX, int hotspotY, wl_client *client = 0);
+    void useHardwareIntegrationExtensionChanged();
 
-    void cleanupGraphicsResources();
-
-    enum TouchExtensionFlag {
-        TouchExtMouseFromTouch = 0x01
-    };
-    Q_DECLARE_FLAGS(TouchExtensionFlags, TouchExtensionFlag)
-    void configureTouchExtension(TouchExtensionFlags flags);
-
-    virtual QWaylandSurfaceView *createView(QWaylandSurface *surface);
-
-    virtual QWaylandInputDevice *inputDeviceFor(QInputEvent *inputEvent);
+    void outputAdded(QWaylandOutput *output);
+    void outputRemoved(QWaylandOutput *output);
 
 protected:
-    QWaylandCompositor(const char *socketName, QtWayland::Compositor *dptr);
     virtual void retainedSelectionReceived(QMimeData *mimeData);
+    virtual QWaylandSeat *createSeat();
+    virtual QWaylandPointer *createPointerDevice(QWaylandSeat *seat);
+    virtual QWaylandKeyboard *createKeyboardDevice(QWaylandSeat *seat);
+    virtual QWaylandTouch *createTouchDevice(QWaylandSeat *seat);
 
-    virtual QWaylandOutput *createOutput(QWindow *window,
-                                         const QString &manufacturer,
-                                         const QString &model);
-
-    friend class QtWayland::Compositor;
-    QtWayland::Compositor *m_compositor;
+    QWaylandCompositor(QWaylandCompositorPrivate &dptr, QObject *parent = nullptr);
 };
-
-Q_DECLARE_OPERATORS_FOR_FLAGS(QWaylandCompositor::ExtensionFlags)
-Q_DECLARE_OPERATORS_FOR_FLAGS(QWaylandCompositor::TouchExtensionFlags)
 
 QT_END_NAMESPACE
 

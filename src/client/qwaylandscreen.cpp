@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -36,7 +42,6 @@
 #include "qwaylanddisplay_p.h"
 #include "qwaylandcursor_p.h"
 #include "qwaylandwindow_p.h"
-#include "qwaylandintegration_p.h"
 
 #include <QtGui/QGuiApplication>
 
@@ -48,29 +53,28 @@ QT_BEGIN_NAMESPACE
 namespace QtWaylandClient {
 
 QWaylandScreen::QWaylandScreen(QWaylandDisplay *waylandDisplay, int version, uint32_t id)
-    : QPlatformScreen()
-    , QtWayland::wl_output(waylandDisplay->wl_registry(), id, qMin(version, 2))
+    : QtWayland::wl_output(waylandDisplay->wl_registry(), id, qMin(version, 2))
     , m_outputId(id)
     , mWaylandDisplay(waylandDisplay)
-    , mScale(1)
-    , mDepth(32)
-    , mRefreshRate(60000)
-    , mTransform(-1)
-    , mFormat(QImage::Format_ARGB32_Premultiplied)
     , mOutputName(QStringLiteral("Screen%1").arg(id))
-    , m_orientation(Qt::PrimaryOrientation)
-    , mWaylandCursor(0)
 {
+    if (auto *xdgOutputManager = waylandDisplay->xdgOutputManager())
+        initXdgOutput(xdgOutputManager);
 }
 
 QWaylandScreen::~QWaylandScreen()
 {
-    delete mWaylandCursor;
+    if (zxdg_output_v1::isInitialized())
+        zxdg_output_v1::destroy();
 }
 
-void QWaylandScreen::init()
+void QWaylandScreen::initXdgOutput(QtWayland::zxdg_output_manager_v1 *xdgOutputManager)
 {
-    mWaylandCursor = mWaylandDisplay->integration()->createPlatformCursor(this);
+    Q_ASSERT(xdgOutputManager);
+    if (zxdg_output_v1::isInitialized())
+        return;
+
+    zxdg_output_v1::init(xdgOutputManager->get_xdg_output(wl_output::object()));
 }
 
 QWaylandDisplay * QWaylandScreen::display() const
@@ -78,11 +82,25 @@ QWaylandDisplay * QWaylandScreen::display() const
     return mWaylandDisplay;
 }
 
+QString QWaylandScreen::manufacturer() const
+{
+    return mManufacturer;
+}
+
+QString QWaylandScreen::model() const
+{
+    return mModel;
+}
+
 QRect QWaylandScreen::geometry() const
 {
-    // Scale geometry for QScreen. This makes window and screen
-    // geometry be in the same coordinate system.
-    return QRect(mGeometry.topLeft(), mGeometry.size() / mScale);
+    if (zxdg_output_v1::isInitialized()) {
+        return mXdgGeometry;
+    } else {
+        // Scale geometry for QScreen. This makes window and screen
+        // geometry be in the same coordinate system.
+        return QRect(mGeometry.topLeft(), mGeometry.size() / mScale);
+    }
 }
 
 int QWaylandScreen::depth() const
@@ -105,11 +123,15 @@ QSizeF QWaylandScreen::physicalSize() const
 
 QDpi QWaylandScreen::logicalDpi() const
 {
-    static int force_dpi = !qgetenv("QT_WAYLAND_FORCE_DPI").isEmpty() ? qgetenv("QT_WAYLAND_FORCE_DPI").toInt() : -1;
-    if (force_dpi > 0)
-        return QDpi(force_dpi, force_dpi);
+    static bool physicalDpi = qEnvironmentVariable("QT_WAYLAND_FORCE_DPI") == QStringLiteral("physical");
+    if (physicalDpi)
+        return QPlatformScreen::logicalDpi();
 
-    return QPlatformScreen::logicalDpi();
+    static int forceDpi = qgetenv("QT_WAYLAND_FORCE_DPI").toInt();
+    if (forceDpi)
+        return QDpi(forceDpi, forceDpi);
+
+    return QDpi(96, 96);
 }
 
 QList<QPlatformScreen *> QWaylandScreen::virtualSiblings() const
@@ -117,8 +139,10 @@ QList<QPlatformScreen *> QWaylandScreen::virtualSiblings() const
     QList<QPlatformScreen *> list;
     const QList<QWaylandScreen*> screens = mWaylandDisplay->screens();
     list.reserve(screens.count());
-    foreach (QWaylandScreen *screen, screens)
-        list << screen;
+    for (QWaylandScreen *screen : qAsConst(screens)) {
+        if (screen->screen())
+            list << screen;
+    }
     return list;
 }
 
@@ -126,7 +150,7 @@ void QWaylandScreen::setOrientationUpdateMask(Qt::ScreenOrientations mask)
 {
     foreach (QWindow *window, QGuiApplication::allWindows()) {
         QWaylandWindow *w = static_cast<QWaylandWindow *>(window->handle());
-        if (w && w->screen() == this)
+        if (w && w->waylandScreen() == this)
             w->setOrientationMask(mask);
     }
 }
@@ -151,15 +175,32 @@ qreal QWaylandScreen::refreshRate() const
     return mRefreshRate / 1000.f;
 }
 
+#if QT_CONFIG(cursor)
+
 QPlatformCursor *QWaylandScreen::cursor() const
 {
-    return  mWaylandCursor;
+    return const_cast<QWaylandScreen *>(this)->waylandCursor();
 }
+
+QWaylandCursor *QWaylandScreen::waylandCursor()
+{
+    if (!mWaylandCursor)
+        mWaylandCursor.reset(new QWaylandCursor(this));
+    return mWaylandCursor.data();
+}
+
+#endif // QT_CONFIG(cursor)
 
 QWaylandScreen * QWaylandScreen::waylandScreenFromWindow(QWindow *window)
 {
     QPlatformScreen *platformScreen = QPlatformScreen::platformScreenForWindow(window);
     return static_cast<QWaylandScreen *>(platformScreen);
+}
+
+QWaylandScreen *QWaylandScreen::fromWlOutput(::wl_output *output)
+{
+    auto wlOutput = static_cast<QtWayland::wl_output *>(wl_output_get_user_data(output));
+    return static_cast<QWaylandScreen *>(wlOutput);
 }
 
 void QWaylandScreen::output_mode(uint32_t flags, int width, int height, int refresh)
@@ -168,7 +209,6 @@ void QWaylandScreen::output_mode(uint32_t flags, int width, int height, int refr
         return;
 
     QSize size(width, height);
-
     if (size != mGeometry.size())
         mGeometry.setSize(size);
 
@@ -184,12 +224,11 @@ void QWaylandScreen::output_geometry(int32_t x, int32_t y,
                                      int32_t transform)
 {
     Q_UNUSED(subpixel);
-    Q_UNUSED(make);
+
+    mManufacturer = make;
+    mModel = model;
 
     mTransform = transform;
-
-    if (!model.isEmpty())
-        mOutputName = model;
 
     mPhysicalSize = QSize(width, height);
     mGeometry.moveTopLeft(QPoint(x, y));
@@ -232,8 +271,25 @@ void QWaylandScreen::output_done()
         QWindowSystemInterface::handleScreenOrientationChange(screen(), m_orientation);
         mTransform = -1;
     }
-    QWindowSystemInterface::handleScreenGeometryChange(screen(), mGeometry, mGeometry);
     QWindowSystemInterface::handleScreenRefreshRateChange(screen(), refreshRate());
+    if (!zxdg_output_v1::isInitialized())
+        QWindowSystemInterface::handleScreenGeometryChange(screen(), geometry(), geometry());
+}
+
+
+void QWaylandScreen::zxdg_output_v1_logical_position(int32_t x, int32_t y)
+{
+    mXdgGeometry.moveTopLeft(QPoint(x, y));
+}
+
+void QWaylandScreen::zxdg_output_v1_logical_size(int32_t width, int32_t height)
+{
+    mXdgGeometry.setSize(QSize(width, height));
+}
+
+void QWaylandScreen::zxdg_output_v1_done()
+{
+    QWindowSystemInterface::handleScreenGeometryChange(screen(), geometry(), geometry());
 }
 
 }

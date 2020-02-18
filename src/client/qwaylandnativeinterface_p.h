@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -48,7 +54,7 @@
 #include <QVariantMap>
 #include <qpa/qplatformnativeinterface.h>
 
-#include <QtWaylandClient/private/qwaylandclientexport_p.h>
+#include <QtWaylandClient/qtwaylandclientglobal.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -61,24 +67,30 @@ class Q_WAYLAND_CLIENT_EXPORT QWaylandNativeInterface : public QPlatformNativeIn
 {
 public:
     QWaylandNativeInterface(QWaylandIntegration *integration);
-    void *nativeResourceForIntegration(const QByteArray &resource) Q_DECL_OVERRIDE;
+    void *nativeResourceForIntegration(const QByteArray &resource) override;
     void *nativeResourceForWindow(const QByteArray &resourceString,
-                                  QWindow *window) Q_DECL_OVERRIDE;
+                                  QWindow *window) override;
     void *nativeResourceForScreen(const QByteArray &resourceString,
-                                  QScreen *screen) Q_DECL_OVERRIDE;
-#ifndef QT_NO_OPENGL
-    void *nativeResourceForContext(const QByteArray &resource, QOpenGLContext *context) Q_DECL_OVERRIDE;
+                                  QScreen *screen) override;
+#if QT_CONFIG(opengl)
+    void *nativeResourceForContext(const QByteArray &resource, QOpenGLContext *context) override;
 #endif
-    QVariantMap windowProperties(QPlatformWindow *window) const Q_DECL_OVERRIDE;
-    QVariant windowProperty(QPlatformWindow *window, const QString &name) const Q_DECL_OVERRIDE;
-    QVariant windowProperty(QPlatformWindow *window, const QString &name, const QVariant &defaultValue) const Q_DECL_OVERRIDE;
-    void setWindowProperty(QPlatformWindow *window, const QString &name, const QVariant &value) Q_DECL_OVERRIDE;
+    QVariantMap windowProperties(QPlatformWindow *window) const override;
+    QVariant windowProperty(QPlatformWindow *window, const QString &name) const override;
+    QVariant windowProperty(QPlatformWindow *window, const QString &name, const QVariant &defaultValue) const override;
+    void setWindowProperty(QPlatformWindow *window, const QString &name, const QVariant &value) override;
 
     void emitWindowPropertyChanged(QPlatformWindow *window, const QString &name);
 
+    QFunctionPointer platformFunction(const QByteArray &resource) const override;
+
 private:
-    QWaylandIntegration *m_integration;
+    QWaylandIntegration *m_integration = nullptr;
     QHash<QPlatformWindow*, QVariantMap> m_windowProperties;
+
+    static void setSync(QWindow *window);
+    static void setDeSync(QWindow *window);
+    static bool isSync(QWindow *window);
 };
 
 }

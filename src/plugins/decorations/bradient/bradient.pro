@@ -5,12 +5,8 @@ OTHER_FILES += \
 
 SOURCES += main.cpp
 
-contains(QT_CONFIG, no-pkg-config) {
-    LIBS += -lwayland-client
-} else {
-    CONFIG += link_pkgconfig
-    PKGCONFIG += wayland-client
-}
+QMAKE_USE += wayland-client
 
 PLUGIN_TYPE = wayland-decoration-client
+PLUGIN_CLASS_NAME = QWaylandBradientDecorationPlugin
 load(qt_plugin)

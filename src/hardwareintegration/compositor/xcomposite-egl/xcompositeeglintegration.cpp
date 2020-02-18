@@ -1,38 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,8 +41,9 @@
 
 #include "wayland-xcomposite-server-protocol.h"
 
-#include <QtCompositor/private/qwlcompositor_p.h>
+#include <QtWaylandCompositor/QWaylandCompositor>
 #include <QtGui/QGuiApplication>
+#include <QtGui/QOpenGLTexture>
 #include <qpa/qplatformnativeinterface.h>
 #include <qpa/qplatformopenglcontext.h>
 
@@ -68,13 +68,11 @@ QVector<EGLint> eglbuildSpec()
 }
 
 XCompositeEglClientBufferIntegration::XCompositeEglClientBufferIntegration()
-    : QtWayland::ClientBufferIntegration()
-    , mDisplay(0)
 {
 
 }
 
-void XCompositeEglClientBufferIntegration::initializeHardware(QtWayland::Display *)
+void XCompositeEglClientBufferIntegration::initializeHardware(struct ::wl_display *)
 {
     QPlatformNativeInterface *nativeInterface = QGuiApplication::platformNativeInterface();
     if (nativeInterface) {
@@ -87,23 +85,37 @@ void XCompositeEglClientBufferIntegration::initializeHardware(QtWayland::Display
     } else {
         qFatal("Platform integration doesn't have native interface");
     }
-    mScreen = XDefaultScreen(mDisplay);
-    new XCompositeHandler(m_compositor->handle(), mDisplay);
+    new XCompositeHandler(m_compositor, mDisplay);
 }
 
-void XCompositeEglClientBufferIntegration::bindTextureToBuffer(struct ::wl_resource *buffer)
+QtWayland::ClientBuffer *XCompositeEglClientBufferIntegration::createBufferFor(wl_resource *buffer)
 {
-    XCompositeBuffer *compositorBuffer = XCompositeBuffer::fromResource(buffer);
-    Pixmap pixmap = XCompositeNameWindowPixmap(mDisplay, compositorBuffer->window());
+    if (wl_shm_buffer_get(buffer))
+        return nullptr;
+    return new XCompositeEglClientBuffer(this, buffer);
+}
+
+
+XCompositeEglClientBuffer::XCompositeEglClientBuffer(XCompositeEglClientBufferIntegration *integration, wl_resource *bufferResource)
+    : QtWayland::ClientBuffer(bufferResource)
+    , m_integration(integration)
+{
+}
+
+QOpenGLTexture *XCompositeEglClientBuffer::toOpenGlTexture(int plane)
+{
+    Q_UNUSED(plane);
+    XCompositeBuffer *compositorBuffer = XCompositeBuffer::fromResource(m_buffer);
+    Pixmap pixmap = XCompositeNameWindowPixmap(m_integration->xDisplay(), compositorBuffer->window());
 
     QVector<EGLint> eglConfigSpec = eglbuildSpec();
 
     EGLint matching = 0;
     EGLConfig config;
-    bool matched = eglChooseConfig(mEglDisplay,eglConfigSpec.constData(),&config,1,&matching);
+    bool matched = eglChooseConfig(m_integration->eglDisplay(),eglConfigSpec.constData(),&config,1,&matching);
     if (!matched || !matching) {
         qWarning("Could not retrieve a suitable EGL config");
-        return;
+        return nullptr;
     }
 
     QVector<EGLint> attribList;
@@ -114,29 +126,37 @@ void XCompositeEglClientBufferIntegration::bindTextureToBuffer(struct ::wl_resou
     attribList.append(EGL_TEXTURE_2D);
     attribList.append(EGL_NONE);
 
-    EGLSurface surface = eglCreatePixmapSurface(mEglDisplay,config,pixmap,attribList.constData());
+    EGLSurface surface = eglCreatePixmapSurface(m_integration->eglDisplay(), config, reinterpret_cast<EGLNativePixmapType>(pixmap), attribList.constData());
     if (surface == EGL_NO_SURFACE) {
         qDebug() << "Failed to create eglsurface" << pixmap << compositorBuffer->window();
     }
 
-    compositorBuffer->setInvertedY(true);
+    compositorBuffer->setOrigin(QWaylandSurface::OriginTopLeft);
 
-    if (!eglBindTexImage(mEglDisplay,surface,EGL_BACK_BUFFER)) {
-        qDebug() << "Failed to bind";
+    if (!m_texture) {
+        m_texture = new QOpenGLTexture(QOpenGLTexture::Target2D);
+        m_texture->create();
+    }
+    m_texture->bind();
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    if (!eglBindTexImage(m_integration->eglDisplay(),surface,EGL_BACK_BUFFER)) {
+        qWarning() << "Failed to bind";
     }
 
     //    eglDestroySurface(mEglDisplay,surface);
+    return m_texture;
 }
 
-bool XCompositeEglClientBufferIntegration::isYInverted(struct ::wl_resource *buffer) const
+
+QWaylandSurface::Origin XCompositeEglClientBuffer::origin() const
 {
-    XCompositeBuffer *compositorBuffer = XCompositeBuffer::fromResource(buffer);
-    return compositorBuffer->isYInverted();
+    XCompositeBuffer *compositorBuffer = XCompositeBuffer::fromResource(m_buffer);
+    return compositorBuffer->origin();
 }
 
-QSize XCompositeEglClientBufferIntegration::bufferSize(struct ::wl_resource *buffer) const
+QSize XCompositeEglClientBuffer::size() const
 {
-    XCompositeBuffer *compositorBuffer = XCompositeBuffer::fromResource(buffer);
+    XCompositeBuffer *compositorBuffer = XCompositeBuffer::fromResource(m_buffer);
 
     return compositorBuffer->size();
 }

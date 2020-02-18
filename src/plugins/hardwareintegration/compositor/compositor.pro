@@ -1,23 +1,26 @@
 TEMPLATE = subdirs
+QT_FOR_CONFIG += waylandcompositor-private
 
-config_wayland_egl: \
+qtConfig(wayland-egl): \
     SUBDIRS += wayland-egl
+qtConfig(wayland-brcm): \
+    SUBDIRS += brcm-egl
+qtConfig(xcomposite-egl): \
+    SUBDIRS += xcomposite-egl
+qtConfig(xcomposite-glx): \
+    SUBDIRS += xcomposite-glx
 
-config_no_webos {
-    config_brcm_egl: \
-        SUBDIRS += brcm-egl
+qtConfig(wayland-drm-egl-server-buffer): \
+    SUBDIRS += drm-egl-server
+qtConfig(wayland-libhybris-egl-server-buffer): \
+    SUBDIRS += libhybris-egl-server
+qtConfig(wayland-shm-emulation-server-buffer): \
+    SUBDIRS += shm-emulation-server
+qtConfig(wayland-dmabuf-server-buffer): \
+    SUBDIRS += dmabuf-server
 
-    config_xcomposite {
-        config_egl: \
-            SUBDIRS += xcomposite-egl
+qtConfig(wayland-egl): \
+    SUBDIRS += wayland-eglstream-controller
 
-        !contains(QT_CONFIG, opengles2):config_glx: \
-            SUBDIRS += xcomposite-glx
-    }
 
-    config_drm_egl_server: \
-        SUBDIRS += drm-egl-server
-
-    config_libhybris_egl_server: \
-        SUBDIRS += libhybris-egl-server
-}
+SUBDIRS += hardwarelayer

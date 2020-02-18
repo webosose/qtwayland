@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,9 +51,10 @@
 // We mean it.
 //
 
+#include <QtWaylandClient/qtwaylandclientglobal.h>
 #include <qpa/qplatformintegration.h>
+#include <QtCore/QScopedPointer>
 
-#include <QtWaylandClient/private/qwaylandclientexport_p.h>
 QT_BEGIN_NAMESPACE
 
 namespace QtWaylandClient {
@@ -59,69 +66,67 @@ class QWaylandServerBufferIntegration;
 class QWaylandShellIntegration;
 class QWaylandInputDeviceIntegration;
 class QWaylandInputDevice;
-class QWaylandScreen;
-class QWaylandCursor;
-class QWaylandDrag;
 
 class Q_WAYLAND_CLIENT_EXPORT QWaylandIntegration : public QPlatformIntegration
 {
 public:
-    QWaylandIntegration(bool useCustomIntegration = false);
-    ~QWaylandIntegration();
+    QWaylandIntegration();
+    ~QWaylandIntegration() override;
 
-    void initIntegration();
+    bool hasFailed() { return mFailed; }
 
-    bool hasCapability(QPlatformIntegration::Capability cap) const Q_DECL_OVERRIDE;
-    QPlatformWindow *createPlatformWindow(QWindow *window) const Q_DECL_OVERRIDE;
-#ifndef QT_NO_OPENGL
-    QPlatformOpenGLContext *createPlatformOpenGLContext(QOpenGLContext *context) const Q_DECL_OVERRIDE;
+    bool hasCapability(QPlatformIntegration::Capability cap) const override;
+    QPlatformWindow *createPlatformWindow(QWindow *window) const override;
+#if QT_CONFIG(opengl)
+    QPlatformOpenGLContext *createPlatformOpenGLContext(QOpenGLContext *context) const override;
 #endif
-    QPlatformBackingStore *createPlatformBackingStore(QWindow *window) const Q_DECL_OVERRIDE;
+    QPlatformBackingStore *createPlatformBackingStore(QWindow *window) const override;
 
-    QAbstractEventDispatcher *createEventDispatcher() const Q_DECL_OVERRIDE;
-    void initialize() Q_DECL_OVERRIDE;
+    QAbstractEventDispatcher *createEventDispatcher() const override;
+    void initialize() override;
 
-    QPlatformFontDatabase *fontDatabase() const Q_DECL_OVERRIDE;
+    QPlatformFontDatabase *fontDatabase() const override;
 
-    QPlatformNativeInterface *nativeInterface() const Q_DECL_OVERRIDE;
-#ifndef QT_NO_DRAGANDDROP
-    QPlatformClipboard *clipboard() const Q_DECL_OVERRIDE;
-    QPlatformDrag *drag() const Q_DECL_OVERRIDE;
+    QPlatformNativeInterface *nativeInterface() const override;
+#if QT_CONFIG(clipboard)
+    QPlatformClipboard *clipboard() const override;
 #endif
-    QPlatformInputContext *inputContext() const Q_DECL_OVERRIDE;
+#if QT_CONFIG(draganddrop)
+    QPlatformDrag *drag() const override;
+#endif
+    QPlatformInputContext *inputContext() const override;
 
-    QVariant styleHint(StyleHint hint) const Q_DECL_OVERRIDE;
+    QVariant styleHint(StyleHint hint) const override;
 
-#ifndef QT_NO_ACCESSIBILITY
-    QPlatformAccessibility *accessibility() const Q_DECL_OVERRIDE;
+#if QT_CONFIG(accessibility)
+    QPlatformAccessibility *accessibility() const override;
 #endif
 
-    QPlatformServices *services() const Q_DECL_OVERRIDE;
+    QPlatformServices *services() const override;
 
     QWaylandDisplay *display() const;
 
-    QStringList themeNames() const Q_DECL_OVERRIDE;
+    QStringList themeNames() const override;
 
-    QPlatformTheme *createPlatformTheme(const QString &name) const Q_DECL_OVERRIDE;
+    QPlatformTheme *createPlatformTheme(const QString &name) const override;
 
-    virtual QWaylandInputDevice *createInputDevice(QWaylandDisplay *display, int version, uint32_t id);
-
-    virtual QWaylandCursor *createPlatformCursor(QWaylandScreen *screen) const;
-    virtual QWaylandScreen *createPlatformScreen(QWaylandDisplay *waylandDisplay, int version, uint32_t id) const;
-    virtual QWaylandDrag *createPlatformDrag(QWaylandDisplay *waylandDisplay) const;
-#ifndef QT_NO_ACCESSIBILITY
-    virtual QPlatformAccessibility *createPlatformAccessibility() const;
-#endif
+    QWaylandInputDevice *createInputDevice(QWaylandDisplay *display, int version, uint32_t id);
 
     virtual QWaylandClientBufferIntegration *clientBufferIntegration() const;
     virtual QWaylandServerBufferIntegration *serverBufferIntegration() const;
     virtual QWaylandShellIntegration *shellIntegration() const;
 
+private:
+    // NOTE: mDisplay *must* be destructed after mDrag and mClientBufferIntegration
+    // and mShellIntegration.
+    // Do not move this definition into the private section at the bottom.
+    QScopedPointer<QWaylandDisplay> mDisplay;
+
 protected:
-    QWaylandClientBufferIntegration *mClientBufferIntegration;
-    QWaylandServerBufferIntegration *mServerBufferIntegration;
-    QWaylandShellIntegration *mShellIntegration;
-    QWaylandInputDeviceIntegration *mInputDeviceIntegration;
+    QScopedPointer<QWaylandClientBufferIntegration> mClientBufferIntegration;
+    QScopedPointer<QWaylandServerBufferIntegration> mServerBufferIntegration;
+    QScopedPointer<QWaylandShellIntegration> mShellIntegration;
+    QScopedPointer<QWaylandInputDeviceIntegration> mInputDeviceIntegration;
 
 private:
     void initializeClientBufferIntegration();
@@ -130,21 +135,22 @@ private:
     void initializeInputDeviceIntegration();
     QWaylandShellIntegration *createShellIntegration(const QString& interfaceName);
 
-protected:
-    QPlatformFontDatabase *mFontDb;
-#ifndef QT_NO_DRAGANDDROP
-    QPlatformClipboard *mClipboard;
-    QPlatformDrag *mDrag;
+    QScopedPointer<QPlatformFontDatabase> mFontDb;
+#if QT_CONFIG(clipboard)
+    QScopedPointer<QPlatformClipboard> mClipboard;
 #endif
-    QWaylandDisplay *mDisplay;
-    QPlatformNativeInterface *mNativeInterface;
+#if QT_CONFIG(draganddrop)
+    QScopedPointer<QPlatformDrag> mDrag;
+#endif
+    QScopedPointer<QPlatformNativeInterface> mNativeInterface;
     QScopedPointer<QPlatformInputContext> mInputContext;
-#ifndef QT_NO_ACCESSIBILITY
-    QPlatformAccessibility *mAccessibility;
+#if QT_CONFIG(accessibility)
+    QScopedPointer<QPlatformAccessibility> mAccessibility;
 #endif
-    bool mClientBufferIntegrationInitialized;
-    bool mServerBufferIntegrationInitialized;
-    bool mShellIntegrationInitialized;
+    bool mFailed = false;
+    bool mClientBufferIntegrationInitialized = false;
+    bool mServerBufferIntegrationInitialized = false;
+    bool mShellIntegrationInitialized = false;
 
     friend class QWaylandDisplay;
 };

@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -36,11 +42,7 @@
 #include <QtWaylandClient/private/qwaylandscreen_p.h>
 #include "qwaylandglcontext.h"
 
-#if (QT_VERSION < QT_VERSION_CHECK(5, 8, 0))
-    #include <QtPlatformSupport/private/qeglconvenience_p.h>
-#else
-    #include <QtEglSupport/private/qeglconvenience_p.h>
-#endif
+#include <QtEglSupport/private/qeglconvenience_p.h>
 
 #include <QDebug>
 #include <QtGui/QWindow>
@@ -55,16 +57,12 @@ namespace QtWaylandClient {
 QWaylandEglWindow::QWaylandEglWindow(QWindow *window)
     : QWaylandWindow(window)
     , m_clientBufferIntegration(static_cast<QWaylandEglClientBufferIntegration *>(mDisplay->clientBufferIntegration()))
-    , m_waylandEglWindow(0)
-    , m_eglSurface(0)
-    , m_contentFBO(0)
-    , m_resize(false)
 {
     QSurfaceFormat fmt = window->requestedFormat();
     if (mDisplay->supportsWindowDecoration())
         fmt.setAlphaBufferSize(8);
     m_eglConfig = q_configFromGLFormat(m_clientBufferIntegration->eglDisplay(), fmt);
-    m_format = q_glFormatFromConfig(m_clientBufferIntegration->eglDisplay(), m_eglConfig);
+    m_format = q_glFormatFromConfig(m_clientBufferIntegration->eglDisplay(), m_eglConfig, fmt);
 
     // Do not create anything from here. This platform window may belong to a
     // RasterGLSurface window which may have pure raster content.  In this case, where the
@@ -90,6 +88,11 @@ QWaylandWindow::WindowType QWaylandEglWindow::windowType() const
     return QWaylandWindow::Egl;
 }
 
+void QWaylandEglWindow::ensureSize()
+{
+    updateSurface(false);
+}
+
 void QWaylandEglWindow::setGeometry(const QRect &rect)
 {
     QWaylandWindow::setGeometry(rect);
@@ -100,16 +103,11 @@ void QWaylandEglWindow::setGeometry(const QRect &rect)
     updateSurface(false);
 }
 
-qreal QWaylandEglWindow::devicePixelRatio() const
-{
-    return screen()->devicePixelRatio();
-}
-
 void QWaylandEglWindow::updateSurface(bool create)
 {
     QMargins margins = frameMargins();
     QRect rect = geometry();
-    QSize sizeWithMargins = (rect.size()*devicePixelRatio() + QSize(margins.left() + margins.right(), margins.top() + margins.bottom())) * scale();
+    QSize sizeWithMargins = (rect.size() + QSize(margins.left() + margins.right(), margins.top() + margins.bottom())) * scale();
 
     // wl_egl_windows must have both width and height > 0
     // mesa's egl returns NULL if we try to create a, invalid wl_egl_window, however not all EGL
@@ -128,25 +126,27 @@ void QWaylandEglWindow::updateSurface(bool create)
     } else {
         if (m_waylandEglWindow) {
             int current_width, current_height;
-            wl_egl_window_get_attached_size(m_waylandEglWindow,&current_width,&current_height);
-            // Window would be resized when
-            // 1) geometry was different from current buffer size
-            // 2) even though size was same but the previous resizing was not completed.
-            if ((current_width != sizeWithMargins.width() || current_height != sizeWithMargins.height())
-                || m_requestedSize != sizeWithMargins) {
-                m_requestedSize = sizeWithMargins;
+            static bool disableResizeCheck = qgetenv("QT_WAYLAND_DISABLE_RESIZECHECK").toInt();
+
+            if (!disableResizeCheck) {
+                wl_egl_window_get_attached_size(m_waylandEglWindow, &current_width, &current_height);
+            }
+            if (disableResizeCheck || (current_width != sizeWithMargins.width() || current_height != sizeWithMargins.height())) {
                 wl_egl_window_resize(m_waylandEglWindow, sizeWithMargins.width(), sizeWithMargins.height(), mOffset.x(), mOffset.y());
                 mOffset = QPoint();
 
                 m_resize = true;
             }
-        } else if (create) {
-            m_waylandEglWindow = wl_egl_window_create(object(), sizeWithMargins.width(), sizeWithMargins.height());
+        } else if (create && wl_surface::isInitialized()) {
+            ::wl_surface *wlSurface = wl_surface::object();
+            m_waylandEglWindow = wl_egl_window_create(wlSurface, sizeWithMargins.width(), sizeWithMargins.height());
         }
 
-        if (!m_eglSurface && create) {
+        if (!m_eglSurface && m_waylandEglWindow && create) {
             EGLNativeWindowType eglw = (EGLNativeWindowType) m_waylandEglWindow;
             m_eglSurface = eglCreateWindowSurface(m_clientBufferIntegration->eglDisplay(), m_eglConfig, eglw, 0);
+            if (Q_UNLIKELY(m_eglSurface == EGL_NO_SURFACE))
+                qCWarning(lcQpaWayland, "Could not create EGL surface (EGL error 0x%x)\n", eglGetError());
         }
     }
 }
@@ -163,11 +163,22 @@ QSurfaceFormat QWaylandEglWindow::format() const
     return m_format;
 }
 
+void QWaylandEglWindow::setVisible(bool visible)
+{
+    QWaylandWindow::setVisible(visible);
+    if (!visible)
+        invalidateSurface();
+}
+
 void QWaylandEglWindow::invalidateSurface()
 {
     if (m_eglSurface) {
         eglDestroySurface(m_clientBufferIntegration->eglDisplay(), m_eglSurface);
         m_eglSurface = 0;
+    }
+    if (m_waylandEglWindow) {
+        wl_egl_window_destroy(m_waylandEglWindow);
+        m_waylandEglWindow = nullptr;
     }
 }
 
@@ -183,7 +194,7 @@ GLuint QWaylandEglWindow::contentFBO() const
 
     if (m_resize || !m_contentFBO) {
         QOpenGLFramebufferObject *old = m_contentFBO;
-        QSize fboSize = geometry().size() * devicePixelRatio() * scale();
+        QSize fboSize = geometry().size() * scale();
         m_contentFBO = new QOpenGLFramebufferObject(fboSize.width(), fboSize.height(), QOpenGLFramebufferObject::CombinedDepthStencil);
 
         delete old;

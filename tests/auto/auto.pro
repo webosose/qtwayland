@@ -1,9 +1,7 @@
 TEMPLATE=subdirs
+QT_FOR_CONFIG += waylandclient-private
 
-#Only build compositor test when we are
-#building QtCompositor
-contains(CONFIG, wayland-compositor) {
+qtConfig(wayland-client): \
+    SUBDIRS += client cmake
+qtHaveModule(waylandcompositor): \
     SUBDIRS += compositor
-    SUBDIRS += client
-    SUBDIRS += cmake
-}

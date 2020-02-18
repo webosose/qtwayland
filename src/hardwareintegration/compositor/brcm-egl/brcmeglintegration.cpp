@@ -1,38 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -40,12 +39,11 @@
 
 #include "brcmeglintegration.h"
 #include "brcmbuffer.h"
-#include <QtCompositor/private/qwlsurface_p.h>
-#include <QtCompositor/private/qwlcompositor_p.h>
-#include <QtCompositor/qwaylandsurface.h>
+#include <QtWaylandCompositor/qwaylandsurface.h>
 #include <qpa/qplatformnativeinterface.h>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QOpenGLContext>
+#include <QOpenGLTexture>
 #include <qpa/qplatformscreen.h>
 #include <QtGui/QWindow>
 
@@ -62,12 +60,12 @@ QT_BEGIN_NAMESPACE
 class BrcmEglIntegrationPrivate
 {
 public:
-    BrcmEglIntegrationPrivate()
-        : egl_display(EGL_NO_DISPLAY)
-        , valid(false)
-    { }
-    EGLDisplay egl_display;
-    bool valid;
+    BrcmEglIntegrationPrivate() = default;
+
+    static BrcmEglIntegrationPrivate *get(BrcmEglIntegration *integration);
+
+    EGLDisplay egl_display = EGL_NO_DISPLAY;
+    bool valid = false;
     PFNEGLQUERYGLOBALIMAGEBRCMPROC eglQueryGlobalImageBRCM;
     PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES;
     PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR;
@@ -75,13 +73,11 @@ public:
 };
 
 BrcmEglIntegration::BrcmEglIntegration()
-    : QtWayland::ClientBufferIntegration()
-    , QtWaylandServer::qt_brcm()
-    , d_ptr(new BrcmEglIntegrationPrivate)
+    : d_ptr(new BrcmEglIntegrationPrivate)
 {
 }
 
-void BrcmEglIntegration::initializeHardware(QtWayland::Display *waylandDisplay)
+void BrcmEglIntegration::initializeHardware(struct ::wl_display *display)
 {
     Q_D(BrcmEglIntegration);
 
@@ -119,28 +115,49 @@ void BrcmEglIntegration::initializeHardware(QtWayland::Display *waylandDisplay)
             return;
         }
         d->valid = true;
-        init(waylandDisplay->handle(), 1);
+        init(display, 1);
     }
 }
 
-void BrcmEglIntegration::bindTextureToBuffer(struct ::wl_resource *buffer)
+QtWayland::ClientBuffer *BrcmEglIntegration::createBufferFor(wl_resource *buffer)
 {
-    Q_D(BrcmEglIntegration);
+    if (wl_shm_buffer_get(buffer))
+        return nullptr;
+    return new BrcmEglClientBuffer(this, buffer);
+}
+
+BrcmEglIntegrationPrivate *BrcmEglIntegrationPrivate::get(BrcmEglIntegration *integration)
+{
+    return integration->d_ptr.data();
+}
+
+QOpenGLTexture *BrcmEglClientBuffer::toOpenGlTexture(int plane)
+{
+    Q_UNUSED(plane);
+
+    auto d = BrcmEglIntegrationPrivate::get(m_integration);
     if (!d->valid) {
         qWarning("bindTextureToBuffer failed!");
-        return;
+        return nullptr;
     }
 
-    BrcmBuffer *brcmBuffer = BrcmBuffer::fromResource(buffer);
+    BrcmBuffer *brcmBuffer = BrcmBuffer::fromResource(m_buffer);
 
     if (!d->eglQueryGlobalImageBRCM(brcmBuffer->handle(), brcmBuffer->handle() + 2)) {
         qWarning("eglQueryGlobalImageBRCM failed!");
-        return;
+        return nullptr;
     }
 
     EGLImageKHR image = d->eglCreateImageKHR(d->egl_display, EGL_NO_CONTEXT, EGL_NATIVE_PIXMAP_KHR, (EGLClientBuffer)brcmBuffer->handle(), NULL);
     if (image == EGL_NO_IMAGE_KHR)
         qWarning("eglCreateImageKHR() failed: %x\n", eglGetError());
+
+    if (!m_texture) {
+        m_texture = new QOpenGLTexture(QOpenGLTexture::Target2D);
+        m_texture->create();
+    }
+
+    m_texture->bind();
 
     d->glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, image);
 
@@ -150,11 +167,8 @@ void BrcmEglIntegration::bindTextureToBuffer(struct ::wl_resource *buffer)
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     d->eglDestroyImageKHR(d->egl_display, image);
-}
 
-bool BrcmEglIntegration::isYInverted(struct ::wl_resource *) const
-{
-    return false;
+    return m_texture;
 }
 
 void BrcmEglIntegration::brcm_bind_resource(Resource *)
@@ -166,11 +180,28 @@ void BrcmEglIntegration::brcm_create_buffer(Resource *resource, uint32_t id, int
     new BrcmBuffer(resource->client(), id, QSize(width, height), static_cast<EGLint *>(data->data), data->size / sizeof(EGLint));
 }
 
-QSize BrcmEglIntegration::bufferSize(struct ::wl_resource *buffer) const
+BrcmEglClientBuffer::BrcmEglClientBuffer(BrcmEglIntegration *integration, wl_resource *buffer)
+    : ClientBuffer(buffer)
+    , m_integration(integration)
 {
-    BrcmBuffer *brcmBuffer = BrcmBuffer::fromResource(buffer);
+}
 
+QWaylandBufferRef::BufferFormatEgl BrcmEglClientBuffer::bufferFormatEgl() const
+{
+    return QWaylandBufferRef::BufferFormatEgl_RGBA;
+}
+
+QSize BrcmEglClientBuffer::size() const
+{
+    BrcmBuffer *brcmBuffer = BrcmBuffer::fromResource(m_buffer);
     return brcmBuffer->size();
 }
+
+QWaylandSurface::Origin BrcmEglClientBuffer::origin() const
+{
+    BrcmBuffer *brcmBuffer = BrcmBuffer::fromResource(m_buffer);
+    return brcmBuffer->isYInverted() ? QWaylandSurface::OriginTopLeft : QWaylandSurface::OriginBottomLeft;
+}
+
 
 QT_END_NAMESPACE

@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the plugins of the Qt Toolkit.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -35,58 +41,41 @@
 #include <QOpenGLTexture>
 #include <QQuickWindow>
 #include <QDebug>
-#include <QQmlPropertyMap>
 
 #include "qwaylandquicksurface.h"
 #include "qwaylandquickcompositor.h"
-#include "qwaylandsurfaceitem.h"
-#include "qwaylandoutput.h"
-#include <QtCompositor/qwaylandbufferref.h>
-#include <QtCompositor/private/qwaylandsurface_p.h>
-#include <QtCompositor/private/qwaylandtexturebufferattacher_p.h>
+#include "qwaylandquickitem.h"
+#include <QtWaylandCompositor/qwaylandbufferref.h>
+#include <QtWaylandCompositor/QWaylandView>
+#include <QtWaylandCompositor/private/qwaylandsurface_p.h>
 
 QT_BEGIN_NAMESPACE
 
 class QWaylandQuickSurfacePrivate : public QWaylandSurfacePrivate
 {
+    Q_DECLARE_PUBLIC(QWaylandQuickSurface)
 public:
-    QWaylandQuickSurfacePrivate(wl_client *client, quint32 id, int version, QWaylandQuickCompositor *c, QWaylandQuickSurface *surf)
-        : QWaylandSurfacePrivate(client, id, version, c, surf)
-        , compositor(c)
-        , useTextureAlpha(true)
-        , windowPropertyMap(new QQmlPropertyMap)
-        , clientRenderingEnabled(true)
+    QWaylandQuickSurfacePrivate()
     {
-
     }
 
-    ~QWaylandQuickSurfacePrivate()
+    ~QWaylandQuickSurfacePrivate() override
     {
-        windowPropertyMap->deleteLater();
-        // buffer is deleted automatically by ~Surface(), since it is the assigned attacher
     }
 
-    void surface_commit(Resource *resource) Q_DECL_OVERRIDE
-    {
-        QWaylandSurfacePrivate::surface_commit(resource);
-
-        Q_FOREACH (QtWayland::Output *output, outputs())
-            output->waylandOutput()->update();
-    }
-
-    QWaylandQuickCompositor *compositor;
-    bool useTextureAlpha;
-    QQmlPropertyMap *windowPropertyMap;
-    bool clientRenderingEnabled;
+    bool useTextureAlpha = true;
+    bool clientRenderingEnabled = true;
 };
 
-QWaylandQuickSurface::QWaylandQuickSurface(wl_client *client, quint32 id, int version, QWaylandQuickCompositor *compositor)
-                    : QWaylandSurface(new QWaylandQuickSurfacePrivate(client, id, version, compositor, this))
+QWaylandQuickSurface::QWaylandQuickSurface()
+    : QWaylandSurface(* new QWaylandQuickSurfacePrivate())
 {
-    Q_D(QWaylandQuickSurface);
-    QWaylandSurface::setBufferAttacher(new QWaylandTextureBufferAttacher(this));
-    connect(this, &QWaylandSurface::windowPropertyChanged, d->windowPropertyMap, &QQmlPropertyMap::insert);
-    connect(d->windowPropertyMap, &QQmlPropertyMap::valueChanged, this, &QWaylandSurface::setWindowProperty);
+
+}
+QWaylandQuickSurface::QWaylandQuickSurface(QWaylandCompositor *compositor, QWaylandClient *client, quint32 id, int version)
+                    : QWaylandSurface(* new QWaylandQuickSurfacePrivate())
+{
+    initialize(compositor, client, id, version);
 }
 
 QWaylandQuickSurface::~QWaylandQuickSurface()
@@ -94,11 +83,11 @@ QWaylandQuickSurface::~QWaylandQuickSurface()
 
 }
 
-QWaylandTextureBufferAttacher *QWaylandQuickSurface::textureBufferAttacher() const
-{
-    return static_cast<QWaylandTextureBufferAttacher*>(bufferAttacher());
-}
-
+/*!
+ * \qmlproperty bool QtWaylandCompositor::WaylandSurface::useTextureAlpha
+ *
+ * This property specifies whether the surface should use texture alpha.
+ */
 bool QWaylandQuickSurface::useTextureAlpha() const
 {
     Q_D(const QWaylandQuickSurface);
@@ -111,29 +100,18 @@ void QWaylandQuickSurface::setUseTextureAlpha(bool useTextureAlpha)
     if (d->useTextureAlpha != useTextureAlpha) {
         d->useTextureAlpha = useTextureAlpha;
         emit useTextureAlphaChanged();
-        emit configure(textureBufferAttacher()->currentBuffer());
+        emit configure(d->bufferRef.hasBuffer());
     }
 }
 
-QObject *QWaylandQuickSurface::windowPropertyMap() const
-{
-    Q_D(const QWaylandQuickSurface);
-    return d->windowPropertyMap;
-}
-
-void QWaylandQuickSurface::advance()
-{
-    QWaylandTextureBufferAttacher *attacher = textureBufferAttacher();
-    const bool update = attacher->isDirty();
-    if (update)
-        attacher->advance();
-}
-
-QWaylandBufferRef QWaylandQuickSurface::currentBuffer() const
-{
-    return textureBufferAttacher()->currentBuffer();
-}
-
+/*!
+ * \qmlproperty bool QtWaylandCompositor::WaylandSurface::clientRenderingEnabled
+ * \deprecated
+ *
+ * This property used to specify whether client rendering was enabled for the surface.
+ * It depended on a Wayland extension that was part of the private API. The surface extension
+ * is not used anymore, so this property does nothing.
+ */
 bool QWaylandQuickSurface::clientRenderingEnabled() const
 {
     Q_D(const QWaylandQuickSurface);
@@ -143,17 +121,11 @@ bool QWaylandQuickSurface::clientRenderingEnabled() const
 void QWaylandQuickSurface::setClientRenderingEnabled(bool enabled)
 {
     Q_D(QWaylandQuickSurface);
+    qWarning() << Q_FUNC_INFO << "doesn't do anything";
     if (d->clientRenderingEnabled != enabled) {
         d->clientRenderingEnabled = enabled;
-
-        sendOnScreenVisibilityChange(enabled);
-
         emit clientRenderingEnabledChanged();
     }
-}
-
-QWaylandSurfaceItem *QWaylandQuickSurface::surfaceItem() {
-    return views().isEmpty() ? NULL : static_cast<QWaylandSurfaceItem*>(views().first());
 }
 
 QT_END_NAMESPACE

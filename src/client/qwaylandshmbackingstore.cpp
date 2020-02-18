@@ -1,111 +1,125 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 #include "qwaylandshmbackingstore_p.h"
 #include "qwaylandwindow_p.h"
+#include "qwaylandsubsurface_p.h"
 #include "qwaylanddisplay_p.h"
 #include "qwaylandscreen_p.h"
 #include "qwaylandabstractdecoration_p.h"
 
 #include <QtCore/qdebug.h>
+#include <QtCore/qstandardpaths.h>
+#include <QtCore/qtemporaryfile.h>
 #include <QtGui/QPainter>
 #include <QMutexLocker>
-#include <QLoggingCategory>
 
 #include <wayland-client.h>
 #include <wayland-client-protocol.h>
-#include "qwaylandshmformathelper.h"
 
 #include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
 #include <sys/mman.h>
+
+#ifdef Q_OS_LINUX
+#  include <sys/syscall.h>
+// from linux/memfd.h:
+#  ifndef MFD_CLOEXEC
+#    define MFD_CLOEXEC     0x0001U
+#  endif
+#endif
 
 QT_BEGIN_NAMESPACE
 
 namespace QtWaylandClient {
 
-Q_DECLARE_LOGGING_CATEGORY(logCategory)
-
-Q_LOGGING_CATEGORY(logCategory, "qt.qpa.wayland.backingstore")
-
 QWaylandShmBuffer::QWaylandShmBuffer(QWaylandDisplay *display,
                      const QSize &size, QImage::Format format, int scale)
-    : QWaylandBuffer()
-    , mShmPool(0)
-    , mMarginsImage(0)
 {
     int stride = size.width() * 4;
     int alloc = stride * size.height();
-    char filename[] = "/tmp/wayland-shm-XXXXXX";
-    int fd = mkstemp(filename);
-    if (fd < 0) {
-        qWarning("mkstemp %s failed: %s", filename, strerror(errno));
-        return;
-    }
-    int flags = fcntl(fd, F_GETFD);
-    if (flags != -1)
-        fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+    int fd = -1;
 
-    if (ftruncate(fd, alloc) < 0) {
-        qWarning("ftruncate failed: %s", strerror(errno));
-        close(fd);
+#ifdef SYS_memfd_create
+    fd = syscall(SYS_memfd_create, "wayland-shm", MFD_CLOEXEC);
+#endif
+
+    QScopedPointer<QFile> filePointer;
+
+    if (fd == -1) {
+        auto tmpFile = new QTemporaryFile (QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) +
+                                       QLatin1String("/wayland-shm-XXXXXX"));
+        tmpFile->open();
+        filePointer.reset(tmpFile);
+    } else {
+        auto file = new QFile;
+        file->open(fd, QIODevice::ReadWrite | QIODevice::Unbuffered, QFile::AutoCloseHandle);
+        filePointer.reset(file);
+    }
+    if (!filePointer->isOpen() || !filePointer->resize(alloc)) {
+        qWarning("QWaylandShmBuffer: failed: %s", qUtf8Printable(filePointer->errorString()));
         return;
     }
+    fd = filePointer->handle();
+
+    // map ourselves: QFile::map() will unmap when the object is destroyed,
+    // but we want this mapping to persist (unmapping in destructor)
     uchar *data = (uchar *)
-            mmap(NULL, alloc, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    unlink(filename);
-
+            mmap(nullptr, alloc, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (data == (uchar *) MAP_FAILED) {
-        qWarning("mmap /dev/zero failed: %s", strerror(errno));
-        close(fd);
+        qErrnoWarning("QWaylandShmBuffer: mmap failed");
         return;
     }
 
-    wl_shm_format wl_format = QWaylandShmFormatHelper::fromQImageFormat(format);
+    QWaylandShm* shm = display->shm();
+    wl_shm_format wl_format = shm->formatFrom(format);
     mImage = QImage(data, size.width(), size.height(), stride, format);
     mImage.setDevicePixelRatio(qreal(scale));
 
-    mShmPool = wl_shm_create_pool(display->shm(), fd, alloc);
+    mShmPool = wl_shm_create_pool(shm->object(), fd, alloc);
     init(wl_shm_pool_create_buffer(mShmPool,0, size.width(), size.height(),
                                        stride, wl_format));
-    close(fd);
 }
 
 QWaylandShmBuffer::~QWaylandShmBuffer(void)
 {
     delete mMarginsImage;
     if (mImage.constBits())
-        munmap((void *) mImage.constBits(), mImage.byteCount());
+        munmap((void *) mImage.constBits(), mImage.sizeInBytes());
     if (mShmPool)
         wl_shm_pool_destroy(mShmPool);
 }
@@ -127,7 +141,7 @@ QImage *QWaylandShmBuffer::imageInsideMargins(const QMargins &marginsIn)
     }
     if (margins.isNull()) {
         delete mMarginsImage;
-        mMarginsImage = 0;
+        mMarginsImage = nullptr;
     }
 
     mMargins = margins;
@@ -141,9 +155,6 @@ QImage *QWaylandShmBuffer::imageInsideMargins(const QMargins &marginsIn)
 QWaylandShmBackingStore::QWaylandShmBackingStore(QWindow *window)
     : QPlatformBackingStore(window)
     , mDisplay(QWaylandScreen::waylandScreenFromWindow(window)->display())
-    , mFrontBuffer(0)
-    , mBackBuffer(0)
-    , mPainting(false)
 {
 
 }
@@ -151,7 +162,7 @@ QWaylandShmBackingStore::QWaylandShmBackingStore(QWindow *window)
 QWaylandShmBackingStore::~QWaylandShmBackingStore()
 {
     if (QWaylandWindow *w = waylandWindow())
-        w->setBackingStore(Q_NULLPTR);
+        w->setBackingStore(nullptr);
 
 //    if (mFrontBuffer == waylandWindow()->attached())
 //        waylandWindow()->attach(0);
@@ -164,22 +175,28 @@ QPaintDevice *QWaylandShmBackingStore::paintDevice()
     return contentSurface();
 }
 
-void QWaylandShmBackingStore::beginPaint(const QRegion &)
+void QWaylandShmBackingStore::beginPaint(const QRegion &region)
 {
     mPainting = true;
     ensureSize();
 
     waylandWindow()->setCanResize(false);
+
+    if (mBackBuffer->image()->hasAlphaChannel()) {
+        QPainter p(paintDevice());
+        p.setCompositionMode(QPainter::CompositionMode_Source);
+        const QColor blank = Qt::transparent;
+        for (const QRect &rect : region)
+            p.fillRect(rect, blank);
+    }
 }
 
 void QWaylandShmBackingStore::endPaint()
 {
     mPainting = false;
+    if (mPendingFlush)
+        flush(window(), mPendingRegion, QPoint());
     waylandWindow()->setCanResize(true);
-}
-
-void QWaylandShmBackingStore::hidden()
-{
 }
 
 void QWaylandShmBackingStore::ensureSize()
@@ -198,8 +215,18 @@ void QWaylandShmBackingStore::flush(QWindow *window, const QRegion &region, cons
     // called instead. The default implementation from QPlatformBackingStore is sufficient
     // however so no need to reimplement that.
 
+
     Q_UNUSED(window);
     Q_UNUSED(offset);
+
+    if (mPainting) {
+        mPendingRegion |= region;
+        mPendingFlush = true;
+        return;
+    }
+
+    mPendingFlush = false;
+    mPendingRegion = QRegion();
 
     if (windowDecoration() && windowDecoration()->isDirty())
         updateDecorations();
@@ -207,14 +234,7 @@ void QWaylandShmBackingStore::flush(QWindow *window, const QRegion &region, cons
     mFrontBuffer = mBackBuffer;
 
     QMargins margins = windowDecorationMargins();
-
-    waylandWindow()->attachOffset(mFrontBuffer);
-    mFrontBuffer->setBusy();
-
-    QVector<QRect> rects = region.rects();
-    foreach (const QRect &rect, rects)
-        waylandWindow()->damage(rect.translated(margins.left(), margins.top()));
-    waylandWindow()->commit();
+    waylandWindow()->safeCommit(mFrontBuffer, region.translated(margins.left(), margins.top()));
 }
 
 void QWaylandShmBackingStore::resize(const QSize &size, const QRegion &)
@@ -231,7 +251,7 @@ QWaylandShmBuffer *QWaylandShmBackingStore::getBuffer(const QSize &size)
             } else {
                 mBuffers.removeOne(b);
                 if (mBackBuffer == b)
-                    mBackBuffer = 0;
+                    mBackBuffer = nullptr;
                 delete b;
             }
         }
@@ -244,7 +264,7 @@ QWaylandShmBuffer *QWaylandShmBackingStore::getBuffer(const QSize &size)
         mBuffers.prepend(b);
         return b;
     }
-    return 0;
+    return nullptr;
 }
 
 void QWaylandShmBackingStore::resize(const QSize &size)
@@ -263,16 +283,16 @@ void QWaylandShmBackingStore::resize(const QSize &size)
     // run single buffered, while with the pixman renderer we have to use two.
     QWaylandShmBuffer *buffer = getBuffer(sizeWithMargins);
     while (!buffer) {
-        qCDebug(logCategory, "QWaylandShmBackingStore: stalling waiting for a buffer to be released from the compositor...");
+        qCDebug(lcWaylandBackingstore, "QWaylandShmBackingStore: stalling waiting for a buffer to be released from the compositor...");
 
         mDisplay->blockingReadEvents();
         buffer = getBuffer(sizeWithMargins);
     }
 
-    int oldSize = mBackBuffer ? mBackBuffer->image()->byteCount() : 0;
+    qsizetype oldSize = mBackBuffer ? mBackBuffer->image()->sizeInBytes() : 0;
     // mBackBuffer may have been deleted here but if so it means its size was different so we wouldn't copy it anyway
-    if (mBackBuffer != buffer && oldSize == buffer->image()->byteCount()) {
-        memcpy(buffer->image()->bits(), mBackBuffer->image()->constBits(), buffer->image()->byteCount());
+    if (mBackBuffer != buffer && oldSize == buffer->image()->sizeInBytes()) {
+        memcpy(buffer->image()->bits(), mBackBuffer->image()->constBits(), buffer->image()->sizeInBytes());
     }
     mBackBuffer = buffer;
     // ensure the new buffer is at the beginning of the list so next time getBuffer() will pick
@@ -351,7 +371,7 @@ QWaylandWindow *QWaylandShmBackingStore::waylandWindow() const
     return static_cast<QWaylandWindow *>(window()->handle());
 }
 
-#ifndef QT_NO_OPENGL
+#if QT_CONFIG(opengl)
 QImage QWaylandShmBackingStore::toImage() const
 {
     // Invoked from QPlatformBackingStore::composeAndFlush() that is called
@@ -360,7 +380,7 @@ QImage QWaylandShmBackingStore::toImage() const
 
     return *contentSurface();
 }
-#endif // QT_NO_OPENGL
+#endif  // opengl
 
 }
 

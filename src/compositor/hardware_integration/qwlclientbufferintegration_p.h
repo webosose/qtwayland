@@ -1,38 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,61 +51,35 @@
 // We mean it.
 //
 
-#include <QtCompositor/qwaylandexport.h>
+#include <QtWaylandCompositor/qtwaylandcompositorglobal.h>
+#include <QtWaylandCompositor/qwaylandsurface.h>
+#include <QtWaylandCompositor/qwaylandbufferref.h>
 #include <QtCore/QSize>
-#include <QtGui/qopengl.h>
-#include <QtGui/QOpenGLContext>
 #include <wayland-server.h>
 
 QT_BEGIN_NAMESPACE
 
 class QWaylandCompositor;
+class QOpenGLTexture;
 
 namespace QtWayland {
 class Display;
 
-class Q_COMPOSITOR_EXPORT ClientBufferIntegration
+class Q_WAYLAND_COMPOSITOR_EXPORT ClientBufferIntegration
 {
 public:
     ClientBufferIntegration();
     virtual ~ClientBufferIntegration() { }
 
     void setCompositor(QWaylandCompositor *compositor) { m_compositor = compositor; }
+    QWaylandCompositor *compositor() const { return m_compositor; }
 
-    virtual void initializeHardware(QtWayland::Display *waylandDisplay) = 0;
+    virtual void initializeHardware(struct ::wl_display *display) = 0;
 
-    virtual void initialize(struct ::wl_resource *buffer) { Q_UNUSED(buffer); }
-
-    virtual GLenum textureTargetForBuffer(struct ::wl_resource *buffer) const { Q_UNUSED(buffer); return GL_TEXTURE_2D; }
-
-    virtual GLuint textureForBuffer(struct ::wl_resource *buffer) {
-        Q_UNUSED(buffer);
-        GLuint texture;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        return texture;
-    }
-
-    virtual void destroyTextureForBuffer(struct ::wl_resource *buffer, GLuint texture)
-    {
-        Q_UNUSED(buffer);
-        glDeleteTextures(1, &texture);
-    }
-
-    // Called with the texture bound.
-    virtual void bindTextureToBuffer(struct ::wl_resource *buffer) = 0;
-
-    virtual void updateTextureForBuffer(struct ::wl_resource *buffer) { Q_UNUSED(buffer); }
-
-    virtual bool isYInverted(struct ::wl_resource *) const { return true; }
-
-    virtual void *lockNativeBuffer(struct ::wl_resource *) const { return 0; }
-    virtual void unlockNativeBuffer(void *) const { return; }
-
-    virtual QSize bufferSize(struct ::wl_resource *) const { return QSize(); }
+    virtual ClientBuffer *createBufferFor(struct ::wl_resource *buffer) = 0;
 
 protected:
-    QWaylandCompositor *m_compositor;
+    QWaylandCompositor *m_compositor = nullptr;
 };
 
 }

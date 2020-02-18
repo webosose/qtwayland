@@ -1,15 +1,24 @@
+requires(qtHaveModule(waylandcompositor))
+requires(qtConfig(opengl))
 TEMPLATE=subdirs
 
-#Only build compositor examples if we are building
-#the QtCompositor API and examples
-contains(CONFIG, examples) {
-contains(CONFIG, wayland-compositor) {
-    SUBDIRS += qwindow-compositor
+SUBDIRS += \
+    qwindow-compositor \
+    minimal-cpp
 
-    qtHaveModule(quick) {
-        SUBDIRS += qml-compositor
+qtHaveModule(quick) {
+    SUBDIRS += minimal-qml
+    SUBDIRS += spanning-screens
+    SUBDIRS += pure-qml
+    SUBDIRS += multi-output
+    SUBDIRS += multi-screen
+    SUBDIRS += overview-compositor
+    SUBDIRS += ivi-compositor
+    SUBDIRS += server-side-decoration
+    qtHaveModule(waylandclient) {
+        SUBDIRS += \
+            custom-extension \
+            server-buffer
     }
-
-    SUBDIRS += server-buffer
-}
+    SUBDIRS += hwlayer-compositor
 }

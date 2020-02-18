@@ -1,7 +1,7 @@
 <RCC>
     <qresource prefix="/">
-        <file>images/background.jpg</file>
+        <file>images/background.png</file>
+        <file>images/Siberischer_tiger_de_edit02.jpg</file>
         <file>qml/main.qml</file>
-        <file>qml/ServerBufferContainer.qml</file>
     </qresource>
 </RCC>

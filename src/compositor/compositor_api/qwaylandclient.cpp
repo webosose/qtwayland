@@ -1,48 +1,48 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#include <private/qobject_p.h>
-
-#include "wayland_wrapper/qwlcompositor_p.h"
-#include "qwaylandcompositor.h"
 #include "qwaylandclient.h"
+#include <QtCore/private/qobject_p.h>
+
+#include <QtWaylandCompositor/QWaylandCompositor>
+#include <QtWaylandCompositor/private/qwaylandcompositor_p.h>
+
 
 #include <wayland-server.h>
 #include <wayland-util.h>
@@ -52,14 +52,15 @@ QT_BEGIN_NAMESPACE
 class QWaylandClientPrivate : public QObjectPrivate
 {
 public:
-    QWaylandClientPrivate(wl_client *_client)
-        : client(_client)
+    QWaylandClientPrivate(QWaylandCompositor *compositor, wl_client *_client)
+        : compositor(compositor)
+        , client(_client)
     {
         // Save client credentials
         wl_client_get_credentials(client, &pid, &uid, &gid);
     }
 
-    ~QWaylandClientPrivate()
+    ~QWaylandClientPrivate() override
     {
     }
 
@@ -68,12 +69,12 @@ public:
         Q_UNUSED(data);
 
         QWaylandClient *client = reinterpret_cast<Listener *>(listener)->parent;
-        Q_ASSERT(client != 0);
-        QtWayland::Compositor::instance()->m_clients.removeOne(client);
+        Q_ASSERT(client != nullptr);
         delete client;
     }
 
-    wl_client *client;
+    QWaylandCompositor *compositor = nullptr;
+    wl_client *client = nullptr;
 
     uid_t uid;
     gid_t gid;
@@ -81,13 +82,36 @@ public:
 
     struct Listener {
         wl_listener listener;
-        QWaylandClient *parent;
+        QWaylandClient *parent = nullptr;
     };
     Listener listener;
 };
 
-QWaylandClient::QWaylandClient(wl_client *client)
-    : QObject(*new QWaylandClientPrivate(client))
+/*!
+ * \qmltype WaylandClient
+ * \inqmlmodule QtWayland.Compositor
+ * \since 5.8
+ * \brief Represents a client connecting to the WaylandCompositor.
+ *
+ * This type represents a client connecting to the compositor using the Wayland protocol.
+ * It corresponds to the Wayland interface wl_client.
+ */
+
+/*!
+ * \class QWaylandClient
+ * \inmodule QtWaylandCompositor
+ * \since 5.8
+ * \brief The QWaylandClient class represents a client connecting to the QWaylandCompositor.
+ *
+ * This class corresponds to a client connecting to the compositor using the Wayland protocol.
+ * It corresponds to the Wayland interface wl_client.
+ */
+
+/*!
+ * Constructs a QWaylandClient for the \a compositor and the Wayland \a client.
+ */
+QWaylandClient::QWaylandClient(QWaylandCompositor *compositor, wl_client *client)
+    : QObject(*new QWaylandClientPrivate(compositor, client))
 {
     Q_D(QWaylandClient);
 
@@ -95,28 +119,40 @@ QWaylandClient::QWaylandClient(wl_client *client)
     d->listener.parent = this;
     d->listener.listener.notify = QWaylandClientPrivate::client_destroy_callback;
     wl_client_add_destroy_listener(client, &d->listener.listener);
+
+    QWaylandCompositorPrivate::get(compositor)->addClient(this);
 }
 
+/*!
+ * Destroys the QWaylandClient.
+ */
 QWaylandClient::~QWaylandClient()
 {
     Q_D(QWaylandClient);
 
     // Remove listener from signal
     wl_list_remove(&d->listener.listener.link);
+
+    QWaylandCompositorPrivate::get(d->compositor)->removeClient(this);
 }
 
-QWaylandClient *QWaylandClient::fromWlClient(wl_client *wlClient)
+/*!
+ * Returns the QWaylandClient corresponding to the Wayland client \a wlClient and \a compositor.
+ * If a QWaylandClient has not already been created for a client, it is
+ * created and returned.
+ */
+QWaylandClient *QWaylandClient::fromWlClient(QWaylandCompositor *compositor, wl_client *wlClient)
 {
     if (!wlClient)
-        return 0;
+        return nullptr;
 
-    QWaylandClient *client = Q_NULLPTR;
+    QWaylandClient *client = nullptr;
 
     wl_listener *l = wl_client_get_destroy_listener(wlClient,
         QWaylandClientPrivate::client_destroy_callback);
     if (l)
         client = reinterpret_cast<QWaylandClientPrivate::Listener *>(
-            wl_container_of(l, (QWaylandClientPrivate::Listener *)0, listener))->parent;
+            wl_container_of(l, (QWaylandClientPrivate::Listener *)nullptr, listener))->parent;
 
     if (!client) {
         // The original idea was to create QWaylandClient instances when
@@ -124,13 +160,33 @@ QWaylandClient *QWaylandClient::fromWlClient(wl_client *wlClient)
         // bind several times resulting in multiple QWaylandClient
         // instances for the same wl_client therefore we create it from
         // here on demand
-        client = new QWaylandClient(wlClient);
-        QtWayland::Compositor::instance()->m_clients.append(client);
+        client = new QWaylandClient(compositor, wlClient);
     }
 
     return client;
 }
 
+/*!
+ * \qmlproperty WaylandCompositor QtWaylandCompositor::WaylandClient::compositor
+ *
+ * This property holds the compositor of this WaylandClient.
+ */
+
+/*!
+ * \property QWaylandClient::compositor
+ *
+ * This property holds the compositor of this QWaylandClient.
+ */
+QWaylandCompositor *QWaylandClient::compositor() const
+{
+    Q_D(const QWaylandClient);
+
+    return d->compositor;
+}
+
+/*!
+ * Returns the Wayland client of this QWaylandClient.
+ */
 wl_client *QWaylandClient::client() const
 {
     Q_D(const QWaylandClient);
@@ -138,6 +194,18 @@ wl_client *QWaylandClient::client() const
     return d->client;
 }
 
+/*!
+ * \qmlproperty int QtWaylandCompositor::WaylandClient::userId
+ *
+ * This property holds the user id of this WaylandClient.
+ */
+
+/*!
+ * \property QWaylandClient::userId
+ * \readonly
+ *
+ * This property holds the user id of this QWaylandClient.
+ */
 qint64 QWaylandClient::userId() const
 {
     Q_D(const QWaylandClient);
@@ -145,6 +213,18 @@ qint64 QWaylandClient::userId() const
     return d->uid;
 }
 
+/*!
+ * \qmlproperty int QtWaylandCompositor::WaylandClient::groupId
+ * \readonly
+ *
+ * This property holds the group id of this WaylandClient.
+ */
+
+/*!
+ * \property QWaylandClient::groupId
+ *
+ * This property holds the group id of this QWaylandClient.
+ */
 qint64 QWaylandClient::groupId() const
 {
     Q_D(const QWaylandClient);
@@ -152,6 +232,18 @@ qint64 QWaylandClient::groupId() const
     return d->gid;
 }
 
+/*!
+ * \qmlproperty int QtWaylandCompositor::WaylandClient::processId
+ * \readonly
+ *
+ * This property holds the process id of this WaylandClient.
+ */
+
+/*!
+ * \property QWaylandClient::processId
+ *
+ * This property holds the process id of this QWaylandClient.
+ */
 qint64 QWaylandClient::processId() const
 {
     Q_D(const QWaylandClient);
@@ -159,16 +251,35 @@ qint64 QWaylandClient::processId() const
     return d->pid;
 }
 
-void QWaylandClient::kill(int sig)
+/*!
+ * \qmlmethod void QtWaylandCompositor::WaylandClient::kill(signal)
+ *
+ * Kills the client with the specified \a signal.
+ */
+
+/*!
+ * Kills the client with the specified \a signal.
+ */
+void QWaylandClient::kill(int signal)
 {
     Q_D(QWaylandClient);
 
-    ::kill(d->pid, sig);
+    ::kill(d->pid, signal);
 }
 
+/*!
+ * \qmlmethod void QtWaylandCompositor::WaylandClient::close()
+ *
+ * Closes the client
+ */
+
+/*!
+ * Closes the client.
+ */
 void QWaylandClient::close()
 {
-    QtWayland::Compositor::instance()->waylandCompositor()->destroyClient(this);
+    Q_D(QWaylandClient);
+    d->compositor->destroyClient(this);
 }
 
 QT_END_NAMESPACE

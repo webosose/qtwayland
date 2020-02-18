@@ -1,24 +1,27 @@
-QT += core-private gui-private quick-private compositor-private
+QT += core gui qml
 
-LIBS += -lwayland-server
+QT += waylandcompositor-private
 
+CONFIG += wayland-scanner
+CONFIG += c++11
 SOURCES += \
     main.cpp \
-    serverbufferitem.cpp
-HEADERS += \
-    serverbufferitem.h \
-    serverbuffertextureprovider.h
+    sharebufferextension.cpp
 
 OTHER_FILES = \
     qml/main.qml \
-    images/background.jpg \
+    qml/Screen.qml \
+    images/background.jpg
+
+WAYLANDSERVERSOURCES += \
+    ../share-buffer.xml
 
 RESOURCES += compositor.qrc
 
-CONFIG +=wayland-scanner
-WAYLANDSERVERSOURCES += ../share-buffer.xml
+TARGET = compositor
 
-DEFINES += QT_COMPOSITOR_QUICK
+HEADERS += \
+    sharebufferextension.h
 
 target.path = $$[QT_INSTALL_EXAMPLES]/wayland/server-buffer/compositor
 INSTALLS += target

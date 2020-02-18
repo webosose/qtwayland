@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -34,93 +40,154 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QXmlStreamReader>
+#include <QtCore/QList>
 
-enum Option {
-    ClientHeader,
-    ServerHeader,
-    ClientCode,
-    ServerCode
-} option;
-
-bool isServerSide()
+class Scanner
 {
-    return option == ServerHeader || option == ServerCode;
+public:
+    explicit Scanner() {}
+    ~Scanner() { delete m_xml; }
+
+    bool parseArguments(int argc, char **argv);
+    void printUsage();
+    bool process();
+    void printErrors();
+
+private:
+    struct WaylandEnumEntry {
+        QByteArray name;
+        QByteArray value;
+        QByteArray summary;
+    };
+
+    struct WaylandEnum {
+        QByteArray name;
+
+        QList<WaylandEnumEntry> entries;
+    };
+
+    struct WaylandArgument {
+        QByteArray name;
+        QByteArray type;
+        QByteArray interface;
+        QByteArray summary;
+        bool allowNull;
+    };
+
+    struct WaylandEvent {
+        bool request;
+        QByteArray name;
+        QByteArray type;
+        QList<WaylandArgument> arguments;
+    };
+
+    struct WaylandInterface {
+        QByteArray name;
+        int version;
+
+        QList<WaylandEnum> enums;
+        QList<WaylandEvent> events;
+        QList<WaylandEvent> requests;
+    };
+
+    bool isServerSide();
+    bool parseOption(const char *str);
+
+    QByteArray byteArrayValue(const QXmlStreamReader &xml, const char *name);
+    int intValue(const QXmlStreamReader &xml, const char *name, int defaultValue = 0);
+    bool boolValue(const QXmlStreamReader &xml, const char *name);
+    WaylandEvent readEvent(QXmlStreamReader &xml, bool request);
+    Scanner::WaylandEnum readEnum(QXmlStreamReader &xml);
+    Scanner::WaylandInterface readInterface(QXmlStreamReader &xml);
+    QByteArray waylandToCType(const QByteArray &waylandType, const QByteArray &interface);
+    QByteArray waylandToQtType(const QByteArray &waylandType, const QByteArray &interface, bool cStyleArray);
+    const Scanner::WaylandArgument *newIdArgument(const QList<WaylandArgument> &arguments);
+
+    void printEvent(const WaylandEvent &e, bool omitNames = false, bool withResource = false);
+    void printEventHandlerSignature(const WaylandEvent &e, const char *interfaceName, bool deepIndent = true);
+    void printEnums(const QList<WaylandEnum> &enums);
+
+    QByteArray stripInterfaceName(const QByteArray &name);
+    bool ignoreInterface(const QByteArray &name);
+
+    enum Option {
+        ClientHeader,
+        ServerHeader,
+        ClientCode,
+        ServerCode
+    } m_option;
+
+    QByteArray m_protocolName;
+    QByteArray m_protocolFilePath;
+    QByteArray m_scannerName;
+    QByteArray m_headerPath;
+    QByteArray m_prefix;
+    QXmlStreamReader *m_xml = nullptr;
+};
+
+bool Scanner::parseArguments(int argc, char **argv)
+{
+    m_scannerName = argv[0];
+
+    if (argc <= 2 || !parseOption(argv[1]))
+        return false;
+
+    m_protocolFilePath = QByteArray(argv[2]);
+
+    if (argc >= 4)
+        m_headerPath = QByteArray(argv[3]);
+    if (argc == 5)
+        m_prefix = QByteArray(argv[4]);
+
+    return true;
 }
 
-QByteArray protocolName;
+void Scanner::printUsage()
+{
+    fprintf(stderr, "Usage: %s [client-header|server-header|client-code|server-code] specfile [header-path] [prefix]\n", m_scannerName.constData());
+}
 
-bool parseOption(const char *str, Option *option)
+bool Scanner::isServerSide()
+{
+    return m_option == ServerHeader || m_option == ServerCode;
+}
+
+bool Scanner::parseOption(const char *str)
 {
     if (str == QLatin1String("client-header"))
-        *option = ClientHeader;
+        m_option = ClientHeader;
     else if (str == QLatin1String("server-header"))
-        *option = ServerHeader;
+        m_option = ServerHeader;
     else if (str == QLatin1String("client-code"))
-        *option = ClientCode;
+        m_option = ClientCode;
     else if (str == QLatin1String("server-code"))
-        *option = ServerCode;
+        m_option = ServerCode;
     else
         return false;
 
     return true;
 }
 
-struct WaylandEnumEntry {
-    QByteArray name;
-    QByteArray value;
-    QByteArray summary;
-};
-
-struct WaylandEnum {
-    QByteArray name;
-
-    QList<WaylandEnumEntry> entries;
-};
-
-struct WaylandArgument {
-    QByteArray name;
-    QByteArray type;
-    QByteArray interface;
-    QByteArray summary;
-    bool allowNull;
-};
-
-struct WaylandEvent {
-    bool request;
-    QByteArray name;
-    QByteArray type;
-    QList<WaylandArgument> arguments;
-};
-
-struct WaylandInterface {
-    QByteArray name;
-    int version;
-
-    QList<WaylandEnum> enums;
-    QList<WaylandEvent> events;
-    QList<WaylandEvent> requests;
-};
-
-QByteArray byteArrayValue(const QXmlStreamReader &xml, const char *name)
+QByteArray Scanner::byteArrayValue(const QXmlStreamReader &xml, const char *name)
 {
     if (xml.attributes().hasAttribute(name))
         return xml.attributes().value(name).toUtf8();
     return QByteArray();
 }
 
-int intValue(const QXmlStreamReader &xml, const char *name, int defaultValue = 0)
+int Scanner::intValue(const QXmlStreamReader &xml, const char *name, int defaultValue)
 {
     bool ok;
     int result = byteArrayValue(xml, name).toInt(&ok);
     return ok ? result : defaultValue;
 }
 
-bool boolValue(const QXmlStreamReader &xml, const char *name)
+bool Scanner::boolValue(const QXmlStreamReader &xml, const char *name)
 {
     return byteArrayValue(xml, name) == "true";
 }
 
-WaylandEvent readEvent(QXmlStreamReader &xml, bool request)
+Scanner::WaylandEvent Scanner::readEvent(QXmlStreamReader &xml, bool request)
 {
     WaylandEvent event;
     event.request = request;
@@ -142,7 +209,7 @@ WaylandEvent readEvent(QXmlStreamReader &xml, bool request)
     return event;
 }
 
-WaylandEnum readEnum(QXmlStreamReader &xml)
+Scanner::WaylandEnum Scanner::readEnum(QXmlStreamReader &xml)
 {
     WaylandEnum result;
     result.name = byteArrayValue(xml, "name");
@@ -162,7 +229,7 @@ WaylandEnum readEnum(QXmlStreamReader &xml)
     return result;
 }
 
-WaylandInterface readInterface(QXmlStreamReader &xml)
+Scanner::WaylandInterface Scanner::readInterface(QXmlStreamReader &xml)
 {
     WaylandInterface interface;
     interface.name = byteArrayValue(xml, "name");
@@ -182,7 +249,7 @@ WaylandInterface readInterface(QXmlStreamReader &xml)
     return interface;
 }
 
-QByteArray waylandToCType(const QByteArray &waylandType, const QByteArray &interface)
+QByteArray Scanner::waylandToCType(const QByteArray &waylandType, const QByteArray &interface)
 {
     if (waylandType == "string")
         return "const char *";
@@ -206,7 +273,7 @@ QByteArray waylandToCType(const QByteArray &waylandType, const QByteArray &inter
     return waylandType;
 }
 
-QByteArray waylandToQtType(const QByteArray &waylandType, const QByteArray &interface, bool cStyleArray)
+QByteArray Scanner::waylandToQtType(const QByteArray &waylandType, const QByteArray &interface, bool cStyleArray)
 {
     if (waylandType == "string")
         return "const QString &";
@@ -216,16 +283,16 @@ QByteArray waylandToQtType(const QByteArray &waylandType, const QByteArray &inte
         return waylandToCType(waylandType, interface);
 }
 
-const WaylandArgument *newIdArgument(const QList<WaylandArgument> &arguments)
+const Scanner::WaylandArgument *Scanner::newIdArgument(const QList<WaylandArgument> &arguments)
 {
     for (int i = 0; i < arguments.size(); ++i) {
         if (arguments.at(i).type == "new_id")
             return &arguments.at(i);
     }
-    return 0;
+    return nullptr;
 }
 
-void printEvent(const WaylandEvent &e, bool omitNames = false, bool withResource = false)
+void Scanner::printEvent(const WaylandEvent &e, bool omitNames, bool withResource)
 {
     printf("%s(", e.name.constData());
     bool needsComma = false;
@@ -268,7 +335,7 @@ void printEvent(const WaylandEvent &e, bool omitNames = false, bool withResource
     printf(")");
 }
 
-void printEventHandlerSignature(const WaylandEvent &e, const char *interfaceName, bool deepIndent = true)
+void Scanner::printEventHandlerSignature(const WaylandEvent &e, const char *interfaceName, bool deepIndent)
 {
     const char *indent = deepIndent ? "    " : "";
     printf("handle_%s(\n", e.name.constData());
@@ -293,7 +360,7 @@ void printEventHandlerSignature(const WaylandEvent &e, const char *interfaceName
     printf(")");
 }
 
-void printEnums(const QList<WaylandEnum> &enums)
+void Scanner::printEnums(const QList<WaylandEnum> &enums)
 {
     for (int i = 0; i < enums.size(); ++i) {
         printf("\n");
@@ -312,66 +379,73 @@ void printEnums(const QList<WaylandEnum> &enums)
     }
 }
 
-QByteArray stripInterfaceName(const QByteArray &name, const QByteArray &prefix)
+QByteArray Scanner::stripInterfaceName(const QByteArray &name)
 {
-    if (!prefix.isEmpty() && name.startsWith(prefix))
-        return name.mid(prefix.size());
+    if (!m_prefix.isEmpty() && name.startsWith(m_prefix))
+        return name.mid(m_prefix.size());
     if (name.startsWith("qt_") || name.startsWith("wl_"))
         return name.mid(3);
 
     return name;
 }
 
-bool ignoreInterface(const QByteArray &name)
+bool Scanner::ignoreInterface(const QByteArray &name)
 {
     return name == "wl_display"
            || (isServerSide() && name == "wl_registry");
 }
 
-void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArray &prefix)
+bool Scanner::process()
 {
-    if (!xml.readNextStartElement())
-        return;
-
-    if (xml.name() != "protocol") {
-        xml.raiseError(QStringLiteral("The file is not a wayland protocol file."));
-        return;
+    QFile file(m_protocolFilePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        fprintf(stderr, "Unable to open file %s\n", m_protocolFilePath.constData());
+        return false;
     }
 
-    protocolName = byteArrayValue(xml, "name");
+    m_xml = new QXmlStreamReader(&file);
+    if (!m_xml->readNextStartElement())
+        return false;
 
-    if (protocolName.isEmpty()) {
-        xml.raiseError(QStringLiteral("Missing protocol name."));
-        return;
+    if (m_xml->name() != "protocol") {
+        m_xml->raiseError(QStringLiteral("The file is not a wayland protocol file."));
+        return false;
+    }
+
+    m_protocolName = byteArrayValue(*m_xml, "name");
+
+    if (m_protocolName.isEmpty()) {
+        m_xml->raiseError(QStringLiteral("Missing protocol name."));
+        return false;
     }
 
     //We should convert - to _ so that the preprocessor wont generate code which will lead to unexpected behavior
     //However, the wayland-scanner doesn't do so we will do the same for now
-    //QByteArray preProcessorProtocolName = QByteArray(protocolName).replace('-', '_').toUpper();
-    QByteArray preProcessorProtocolName = QByteArray(protocolName).toUpper();
+    //QByteArray preProcessorProtocolName = QByteArray(m_protocolName).replace('-', '_').toUpper();
+    QByteArray preProcessorProtocolName = QByteArray(m_protocolName).toUpper();
 
     QList<WaylandInterface> interfaces;
 
-    while (xml.readNextStartElement()) {
-        if (xml.name() == "interface")
-            interfaces << readInterface(xml);
+    while (m_xml->readNextStartElement()) {
+        if (m_xml->name() == "interface")
+            interfaces << readInterface(*m_xml);
         else
-            xml.skipCurrentElement();
+            m_xml->skipCurrentElement();
     }
 
-    if (xml.hasError())
-        return;
+    if (m_xml->hasError())
+        return false;
 
-    if (option == ServerHeader) {
+    if (m_option == ServerHeader) {
         QByteArray inclusionGuard = QByteArray("QT_WAYLAND_SERVER_") + preProcessorProtocolName.constData();
         printf("#ifndef %s\n", inclusionGuard.constData());
         printf("#define %s\n", inclusionGuard.constData());
         printf("\n");
         printf("#include \"wayland-server.h\"\n");
-        if (headerPath.isEmpty())
-            printf("#include \"wayland-%s-server-protocol.h\"\n", QByteArray(protocolName).replace('_', '-').constData());
+        if (m_headerPath.isEmpty())
+            printf("#include \"wayland-%s-server-protocol.h\"\n", QByteArray(m_protocolName).replace('_', '-').constData());
         else
-            printf("#include <%s/wayland-%s-server-protocol.h>\n", headerPath.constData(), QByteArray(protocolName).replace('_', '-').constData());
+            printf("#include <%s/wayland-%s-server-protocol.h>\n", m_headerPath.constData(), QByteArray(m_protocolName).replace('_', '-').constData());
         printf("#include <QByteArray>\n");
         printf("#include <QMultiMap>\n");
         printf("#include <QString>\n");
@@ -386,9 +460,11 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
 
         printf("\n");
         printf("QT_BEGIN_NAMESPACE\n");
-
+        printf("QT_WARNING_PUSH\n");
+        printf("QT_WARNING_DISABLE_GCC(\"-Wmissing-field-initializers\")\n");
+        printf("QT_WARNING_DISABLE_CLANG(\"-Wmissing-field-initializers\")\n");
         QByteArray serverExport;
-        if (headerPath.size()) {
+        if (m_headerPath.size()) {
             serverExport = QByteArray("Q_WAYLAND_SERVER_") + preProcessorProtocolName + "_EXPORT";
             printf("\n");
             printf("#if !defined(%s)\n", serverExport.constData());
@@ -410,13 +486,14 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
 
             const char *interfaceName = interface.name.constData();
 
-            QByteArray stripped = stripInterfaceName(interface.name, prefix);
+            QByteArray stripped = stripInterfaceName(interface.name);
             const char *interfaceNameStripped = stripped.constData();
 
             printf("    class %s %s\n    {\n", serverExport.constData(), interfaceName);
             printf("    public:\n");
             printf("        %s(struct ::wl_client *client, int id, int version);\n", interfaceName);
             printf("        %s(struct ::wl_display *display, int version);\n", interfaceName);
+            printf("        %s(struct ::wl_resource *resource);\n", interfaceName);
             printf("        %s();\n", interfaceName);
             printf("\n");
             printf("        virtual ~%s();\n", interfaceName);
@@ -424,20 +501,21 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
             printf("        class Resource\n");
             printf("        {\n");
             printf("        public:\n");
-            printf("            Resource() : %s_object(0), handle(0) {}\n", interfaceNameStripped);
+            printf("            Resource() : %s_object(nullptr), handle(nullptr) {}\n", interfaceNameStripped);
             printf("            virtual ~Resource() {}\n");
             printf("\n");
             printf("            %s *%s_object;\n", interfaceName, interfaceNameStripped);
             printf("            struct ::wl_resource *handle;\n");
             printf("\n");
-            printf("            struct ::wl_client *client() const { return handle->client; }\n");
+            printf("            struct ::wl_client *client() const { return wl_resource_get_client(handle); }\n");
             printf("            int version() const { return wl_resource_get_version(handle); }\n");
             printf("\n");
-            printf("            static Resource *fromResource(struct ::wl_resource *resource) { return static_cast<Resource *>(resource->data); }\n");
+            printf("            static Resource *fromResource(struct ::wl_resource *resource);\n");
             printf("        };\n");
             printf("\n");
             printf("        void init(struct ::wl_client *client, int id, int version);\n");
             printf("        void init(struct ::wl_display *display, int version);\n");
+            printf("        void init(struct ::wl_resource *resource);\n");
             printf("\n");
             printf("        Resource *add(struct ::wl_client *client, int version);\n");
             printf("        Resource *add(struct ::wl_client *client, int id, int version);\n");
@@ -449,8 +527,13 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
             printf("        QMultiMap<struct ::wl_client*, Resource*> resourceMap() { return m_resource_map; }\n");
             printf("        const QMultiMap<struct ::wl_client*, Resource*> resourceMap() const { return m_resource_map; }\n");
             printf("\n");
-            printf("        bool isGlobal() const { return m_global != 0; }\n");
-            printf("        bool isResource() const { return m_resource != 0; }\n");
+            printf("        bool isGlobal() const { return m_global != nullptr; }\n");
+            printf("        bool isResource() const { return m_resource != nullptr; }\n");
+            printf("\n");
+            printf("        static const struct ::wl_interface *interface();\n");
+            printf("        static QByteArray interfaceName() { return interface()->name; }\n");
+            printf("        static int interfaceVersion() { return interface()->version; }\n");
+            printf("\n");
 
             printEnums(interface.enums);
 
@@ -490,8 +573,10 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
             printf("    private:\n");
             printf("        static void bind_func(struct ::wl_client *client, void *data, uint32_t version, uint32_t id);\n");
             printf("        static void destroy_func(struct ::wl_resource *client_resource);\n");
+            printf("        static void display_destroy_func(struct ::wl_listener *listener, void *data);\n");
             printf("\n");
             printf("        Resource *bind(struct ::wl_client *client, uint32_t id, int version);\n");
+            printf("        Resource *bind(struct ::wl_resource *handle);\n");
 
             if (hasRequests) {
                 printf("\n");
@@ -512,6 +597,10 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
             printf("        Resource *m_resource;\n");
             printf("        struct ::wl_global *m_global;\n");
             printf("        uint32_t m_globalVersion;\n");
+            printf("        struct DisplayDestroyedListener : ::wl_listener {\n");
+            printf("            %s *parent;\n", interfaceName);
+            printf("        };\n");
+            printf("        DisplayDestroyedListener m_displayDestroyedListener;\n");
             printf("    };\n");
 
             if (j < interfaces.size() - 1)
@@ -520,18 +609,21 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
 
         printf("}\n");
         printf("\n");
+        printf("QT_WARNING_POP\n");
         printf("QT_END_NAMESPACE\n");
         printf("\n");
         printf("#endif\n");
     }
 
-    if (option == ServerCode) {
-        if (headerPath.isEmpty())
-            printf("#include \"qwayland-server-%s.h\"\n", QByteArray(protocolName).replace('_', '-').constData());
+    if (m_option == ServerCode) {
+        if (m_headerPath.isEmpty())
+            printf("#include \"qwayland-server-%s.h\"\n", QByteArray(m_protocolName).replace('_', '-').constData());
         else
-            printf("#include <%s/qwayland-server-%s.h>\n", headerPath.constData(), QByteArray(protocolName).replace('_', '-').constData());
+            printf("#include <%s/qwayland-server-%s.h>\n", m_headerPath.constData(), QByteArray(m_protocolName).replace('_', '-').constData());
         printf("\n");
         printf("QT_BEGIN_NAMESPACE\n");
+        printf("QT_WARNING_PUSH\n");
+        printf("QT_WARNING_DISABLE_GCC(\"-Wmissing-field-initializers\")\n");
         printf("\n");
         printf("namespace QtWaylandServer {\n");
 
@@ -549,13 +641,13 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
 
             const char *interfaceName = interface.name.constData();
 
-            QByteArray stripped = stripInterfaceName(interface.name, prefix);
+            QByteArray stripped = stripInterfaceName(interface.name);
             const char *interfaceNameStripped = stripped.constData();
 
             printf("    %s::%s(struct ::wl_client *client, int id, int version)\n", interfaceName, interfaceName);
             printf("        : m_resource_map()\n");
-            printf("        , m_resource(0)\n");
-            printf("        , m_global(0)\n");
+            printf("        , m_resource(nullptr)\n");
+            printf("        , m_global(nullptr)\n");
             printf("    {\n");
             printf("        init(client, id, version);\n");
             printf("    }\n");
@@ -563,29 +655,51 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
 
             printf("    %s::%s(struct ::wl_display *display, int version)\n", interfaceName, interfaceName);
             printf("        : m_resource_map()\n");
-            printf("        , m_resource(0)\n");
-            printf("        , m_global(0)\n");
+            printf("        , m_resource(nullptr)\n");
+            printf("        , m_global(nullptr)\n");
             printf("    {\n");
             printf("        init(display, version);\n");
             printf("    }\n");
             printf("\n");
 
+            printf("    %s::%s(struct ::wl_resource *resource)\n", interfaceName, interfaceName);
+            printf("        : m_resource_map()\n");
+            printf("        , m_resource(nullptr)\n");
+            printf("        , m_global(nullptr)\n");
+            printf("    {\n");
+            printf("        init(resource);\n");
+            printf("    }\n");
+            printf("\n");
+
             printf("    %s::%s()\n", interfaceName, interfaceName);
             printf("        : m_resource_map()\n");
-            printf("        , m_resource(0)\n");
-            printf("        , m_global(0)\n");
+            printf("        , m_resource(nullptr)\n");
+            printf("        , m_global(nullptr)\n");
             printf("    {\n");
             printf("    }\n");
             printf("\n");
 
             printf("    %s::~%s()\n", interfaceName, interfaceName);
             printf("    {\n");
+            printf("        for (auto resource : qAsConst(m_resource_map))\n");
+            printf("            wl_resource_set_implementation(resource->handle, nullptr, nullptr, nullptr);\n");
+            printf("\n");
+            printf("        if (m_global) {\n");
+            printf("            wl_global_destroy(m_global);\n");
+            printf("            wl_list_remove(&m_displayDestroyedListener.link);\n");
+            printf("        }\n");
             printf("    }\n");
             printf("\n");
 
             printf("    void %s::init(struct ::wl_client *client, int id, int version)\n", interfaceName);
             printf("    {\n");
             printf("        m_resource = bind(client, id, version);\n");
+            printf("    }\n");
+            printf("\n");
+
+            printf("    void %s::init(struct ::wl_resource *resource)\n", interfaceName);
+            printf("    {\n");
+            printf("        m_resource = bind(resource);\n");
             printf("    }\n");
             printf("\n");
 
@@ -609,6 +723,15 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
             printf("    {\n");
             printf("        m_global = wl_global_create(display, &::%s_interface, version, this, bind_func);\n", interfaceName);
             printf("        m_globalVersion = version;\n");
+            printf("        m_displayDestroyedListener.notify = %s::display_destroy_func;\n", interfaceName);
+            printf("        m_displayDestroyedListener.parent = this;\n");
+            printf("        wl_display_add_destroy_listener(display, &m_displayDestroyedListener);\n");
+            printf("    }\n");
+            printf("\n");
+
+            printf("    const struct wl_interface *%s::interface()\n", interfaceName);
+            printf("    {\n");
+            printf("        return &::%s_interface;\n", interfaceName);
             printf("    }\n");
             printf("\n");
 
@@ -635,6 +758,14 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
             printf("    }\n");
             printf("\n");
 
+            printf("    void %s::display_destroy_func(struct ::wl_listener *listener, void *data)\n", interfaceName);
+            printf("    {\n");
+            printf("        Q_UNUSED(data);\n");
+            printf("        %s *that = static_cast<%s::DisplayDestroyedListener *>(listener)->parent;\n", interfaceName, interfaceName);
+            printf("        that->m_global = nullptr;\n");
+            printf("    }\n");
+            printf("\n");
+
             printf("    void %s::destroy_func(struct ::wl_resource *client_resource)\n", interfaceName);
             printf("    {\n");
             printf("        Resource *resource = Resource::fromResource(client_resource);\n");
@@ -642,29 +773,42 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
             printf("        that->m_resource_map.remove(resource->client(), resource);\n");
             printf("        that->%s_destroy_resource(resource);\n", interfaceNameStripped);
             printf("        delete resource;\n");
-            printf("#if !WAYLAND_VERSION_CHECK(1, 2, 0)\n");
-            printf("        free(client_resource);\n");
-            printf("#endif\n");
             printf("    }\n");
             printf("\n");
 
             bool hasRequests = !interface.requests.isEmpty();
 
-            QByteArray interfaceMember = hasRequests ? "&m_" + interface.name + "_interface" : QByteArray("0");
+            QByteArray interfaceMember = hasRequests ? "&m_" + interface.name + "_interface" : QByteArray("nullptr");
 
             //We should consider changing bind so that it doesn't special case id == 0
             //and use function overloading instead. Jan do you have a lot of code dependent on this behavior?
             printf("    %s::Resource *%s::bind(struct ::wl_client *client, uint32_t id, int version)\n", interfaceName, interfaceName);
             printf("    {\n");
+            printf("        Q_ASSERT_X(!wl_client_get_object(client, id), \"QWaylandObject bind\", QStringLiteral(\"binding to object %%1 more than once\").arg(id).toLocal8Bit().constData());\n");
+            printf("        struct ::wl_resource *handle = wl_resource_create(client, &::%s_interface, version, id);\n", interfaceName);
+            printf("        return bind(handle);\n");
+            printf("    }\n");
+            printf("\n");
+
+            printf("    %s::Resource *%s::bind(struct ::wl_resource *handle)\n", interfaceName, interfaceName);
+            printf("    {\n");
             printf("        Resource *resource = %s_allocate();\n", interfaceNameStripped);
             printf("        resource->%s_object = this;\n", interfaceNameStripped);
             printf("\n");
-            printf("        struct ::wl_resource *handle = wl_resource_create(client, &::%s_interface, version, id);\n", interfaceName);
             printf("        wl_resource_set_implementation(handle, %s, resource, destroy_func);", interfaceMember.constData());
             printf("\n");
             printf("        resource->handle = handle;\n");
             printf("        %s_bind_resource(resource);\n", interfaceNameStripped);
             printf("        return resource;\n");
+            printf("    }\n");
+
+            printf("    %s::Resource *%s::Resource::fromResource(struct ::wl_resource *resource)\n", interfaceName, interfaceName);
+            printf("    {\n");
+            printf("        if (Q_UNLIKELY(!resource))\n");
+            printf("            return nullptr;\n");
+            printf("        if (wl_resource_instance_of(resource, &::%s_interface, %s))\n",  interfaceName, interfaceMember.constData());
+            printf("            return static_cast<Resource *>(wl_resource_get_user_data(resource));\n");
+            printf("        return nullptr;\n");
             printf("    }\n");
 
             if (hasRequests) {
@@ -779,26 +923,29 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
         }
         printf("}\n");
         printf("\n");
+        printf("QT_WARNING_POP\n");
         printf("QT_END_NAMESPACE\n");
     }
 
-    if (option == ClientHeader) {
+    if (m_option == ClientHeader) {
         QByteArray inclusionGuard = QByteArray("QT_WAYLAND_") + preProcessorProtocolName.constData();
         printf("#ifndef %s\n", inclusionGuard.constData());
         printf("#define %s\n", inclusionGuard.constData());
         printf("\n");
-        if (headerPath.isEmpty())
-            printf("#include \"wayland-%s-client-protocol.h\"\n", QByteArray(protocolName).replace('_', '-').constData());
+        if (m_headerPath.isEmpty())
+            printf("#include \"wayland-%s-client-protocol.h\"\n", QByteArray(m_protocolName).replace('_', '-').constData());
         else
-            printf("#include <%s/wayland-%s-client-protocol.h>\n", headerPath.constData(), QByteArray(protocolName).replace('_', '-').constData());
+            printf("#include <%s/wayland-%s-client-protocol.h>\n", m_headerPath.constData(), QByteArray(m_protocolName).replace('_', '-').constData());
         printf("#include <QByteArray>\n");
         printf("#include <QString>\n");
         printf("\n");
         printf("QT_BEGIN_NAMESPACE\n");
+        printf("QT_WARNING_PUSH\n");
+        printf("QT_WARNING_DISABLE_GCC(\"-Wmissing-field-initializers\")\n");
 
         QByteArray clientExport;
 
-        if (headerPath.size()) {
+        if (m_headerPath.size()) {
             clientExport = QByteArray("Q_WAYLAND_CLIENT_") + preProcessorProtocolName + "_EXPORT";
             printf("\n");
             printf("#if !defined(%s)\n", clientExport.constData());
@@ -819,7 +966,7 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
 
             const char *interfaceName = interface.name.constData();
 
-            QByteArray stripped = stripInterfaceName(interface.name, prefix);
+            QByteArray stripped = stripInterfaceName(interface.name);
             const char *interfaceNameStripped = stripped.constData();
 
             printf("    class %s %s\n    {\n", clientExport.constData(), interfaceName);
@@ -837,6 +984,8 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
             printf("        const struct ::%s *object() const { return m_%s; }\n", interfaceName, interfaceName);
             printf("\n");
             printf("        bool isInitialized() const;\n");
+            printf("\n");
+            printf("        static const struct ::wl_interface *interface();\n");
 
             printEnums(interface.enums);
 
@@ -890,18 +1039,21 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
         }
         printf("}\n");
         printf("\n");
+        printf("QT_WARNING_POP\n");
         printf("QT_END_NAMESPACE\n");
         printf("\n");
         printf("#endif\n");
     }
 
-    if (option == ClientCode) {
-        if (headerPath.isEmpty())
-            printf("#include \"qwayland-%s.h\"\n", QByteArray(protocolName).replace('_', '-').constData());
+    if (m_option == ClientCode) {
+        if (m_headerPath.isEmpty())
+            printf("#include \"qwayland-%s.h\"\n", QByteArray(m_protocolName).replace('_', '-').constData());
         else
-            printf("#include <%s/qwayland-%s.h>\n", headerPath.constData(), QByteArray(protocolName).replace('_', '-').constData());
+            printf("#include <%s/qwayland-%s.h>\n", m_headerPath.constData(), QByteArray(m_protocolName).replace('_', '-').constData());
         printf("\n");
         printf("QT_BEGIN_NAMESPACE\n");
+        printf("QT_WARNING_PUSH\n");
+        printf("QT_WARNING_DISABLE_GCC(\"-Wmissing-field-initializers\")\n");
         printf("\n");
         printf("namespace QtWayland {\n");
         for (int j = 0; j < interfaces.size(); ++j) {
@@ -912,7 +1064,7 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
 
             const char *interfaceName = interface.name.constData();
 
-            QByteArray stripped = stripInterfaceName(interface.name, prefix);
+            QByteArray stripped = stripInterfaceName(interface.name);
             const char *interfaceNameStripped = stripped.constData();
 
             bool hasEvents = !interface.events.isEmpty();
@@ -932,7 +1084,7 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
             printf("\n");
 
             printf("    %s::%s()\n", interfaceName, interfaceName);
-            printf("        : m_%s(0)\n", interfaceName);
+            printf("        : m_%s(nullptr)\n", interfaceName);
             printf("    {\n");
             printf("    }\n");
             printf("\n");
@@ -960,7 +1112,13 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
 
             printf("    bool %s::isInitialized() const\n", interfaceName);
             printf("    {\n");
-            printf("        return m_%s != 0;\n", interfaceName);
+            printf("        return m_%s != nullptr;\n", interfaceName);
+            printf("    }\n");
+            printf("\n");
+
+            printf("    const struct wl_interface *%s::interface()\n", interfaceName);
+            printf("    {\n");
+            printf("        return &::%s_interface;\n", interfaceName);
             printf("    }\n");
 
             for (int i = 0; i < interface.requests.size(); ++i) {
@@ -1020,7 +1178,7 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
                 }
                 printf(");\n");
                 if (e.type == "destructor")
-                    printf("        m_%s = 0;\n", interfaceName);
+                    printf("        m_%s = nullptr;\n", interfaceName);
                 printf("    }\n");
             }
 
@@ -1043,8 +1201,6 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
                     for (int i = 0; i < e.arguments.size(); ++i) {
                         printf("\n");
                         const WaylandArgument &a = e.arguments.at(i);
-                        QByteArray cType = waylandToCType(a.type, a.interface);
-                        QByteArray qtType = waylandToQtType(a.type, a.interface, e.request);
                         const char *argumentName = a.name.constData();
                         if (a.type == "string")
                             printf("            QString::fromUtf8(%s)", argumentName);
@@ -1078,36 +1234,33 @@ void process(QXmlStreamReader &xml, const QByteArray &headerPath, const QByteArr
         }
         printf("}\n");
         printf("\n");
+        printf("QT_WARNING_POP\n");
         printf("QT_END_NAMESPACE\n");
     }
+
+    return true;
+}
+
+void Scanner::printErrors()
+{
+    if (m_xml->hasError())
+        fprintf(stderr, "XML error: %s\nLine %lld, column %lld\n", m_xml->errorString().toLocal8Bit().constData(), m_xml->lineNumber(), m_xml->columnNumber());
 }
 
 int main(int argc, char **argv)
 {
-    if (argc <= 2 || !parseOption(argv[1], &option)) {
-        fprintf(stderr, "Usage: %s [client-header|server-header|client-code|server-code] specfile [header-path] [prefix]\n", argv[0]);
-        return 1;
-    }
-
     QCoreApplication app(argc, argv);
+    Scanner scanner;
 
-    QByteArray headerPath;
-    if (argc >= 4)
-        headerPath = QByteArray(argv[3]);
-    QByteArray prefix;
-    if (argc == 5)
-        prefix = QByteArray(argv[4]);
-    QFile file(argv[2]);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        fprintf(stderr, "Unable to open file %s\n", argv[2]);
-        return 1;
+    if (!scanner.parseArguments(argc, argv)) {
+        scanner.printUsage();
+        return EXIT_FAILURE;
     }
 
-    QXmlStreamReader xml(&file);
-    process(xml, headerPath, prefix);
-
-    if (xml.hasError()) {
-        fprintf(stderr, "XML error: %s\nLine %lld, column %lld\n", xml.errorString().toLocal8Bit().constData(), xml.lineNumber(), xml.columnNumber());
-        return 1;
+    if (!scanner.process()) {
+        scanner.printErrors();
+        return EXIT_FAILURE;
     }
+
+    return EXIT_SUCCESS;
 }

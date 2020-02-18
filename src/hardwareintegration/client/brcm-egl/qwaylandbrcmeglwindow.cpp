@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -37,7 +43,7 @@
 #include <QtWaylandClient/private/qwaylandscreen_p.h>
 #include "qwaylandbrcmglcontext.h"
 
-#include <QtPlatformSupport/private/qeglconvenience_p.h>
+#include <QtEglSupport/private/qeglconvenience_p.h>
 
 #include <QtGui/QWindow>
 #include <qpa/qwindowsysteminterface.h>
@@ -61,7 +67,6 @@ public:
                        int count,
                        struct wl_event_queue *eventQueue)
         : m_size(size)
-        , m_released(true)
         , m_display(display)
         , m_eventQueue(eventQueue)
     {
@@ -85,6 +90,7 @@ public:
     {
         wl_array_release(&m_array);
         wl_buffer_destroy(mBuffer);
+        mBuffer = nullptr;
     }
 
     QSize size() const { return m_size; }
@@ -112,21 +118,18 @@ public:
 private:
 
     QSize m_size;
-    bool m_released;
+    bool m_released = true;
     wl_array m_array;
-    EGLint *m_data;
-    QWaylandDisplay *m_display;
-    struct wl_event_queue *m_eventQueue;
+    EGLint *m_data = nullptr;
+    QWaylandDisplay *m_display = nullptr;
+    struct wl_event_queue *m_eventQueue = nullptr;
 };
 
 QWaylandBrcmEglWindow::QWaylandBrcmEglWindow(QWindow *window)
     : QWaylandWindow(window)
     , m_eglIntegration(static_cast<QWaylandBrcmEglIntegration *>(mDisplay->clientBufferIntegration()))
-    , m_eglConfig(0)
     , m_format(window->format())
     , m_eventQueue(wl_display_create_queue(mDisplay->wl_display()))
-    , m_current(0)
-    , m_count(0)
 {
 }
 
@@ -246,9 +249,7 @@ void QWaylandBrcmEglWindow::swapBuffers()
         return;
 
     m_buffers[m_current]->bind();
-    attach(m_buffers[m_current], 0, 0);
-    damage(QRect(QPoint(), geometry().size()));
-    commit();
+    commit(m_buffers[m_current], QRegion(0, 0, geometry().size().width(), geometry().size().height()));
 
     m_current = (m_current + 1) % m_count;
     m_buffers[m_current]->waitForRelease();

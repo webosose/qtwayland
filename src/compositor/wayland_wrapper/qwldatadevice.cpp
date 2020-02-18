@@ -1,38 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -40,44 +39,39 @@
 
 #include "qwldatadevice_p.h"
 
-#include "qwlcompositor_p.h"
 #include "qwldatasource_p.h"
 #include "qwldataoffer_p.h"
-#include "qwlinputdevice_p.h"
-#include "qwlkeyboard_p.h"
-#include "qwlpointer_p.h"
-#include "qwlsurface_p.h"
-#include "qwltouch_p.h"
+#include "qwaylandsurface_p.h"
 #include "qwldatadevicemanager_p.h"
 
+#if QT_CONFIG(draganddrop)
 #include "qwaylanddrag.h"
-#include "qwaylandsurfaceview.h"
+#endif
+#include "qwaylandview.h"
+#include <QtWaylandCompositor/QWaylandClient>
+#include <QtWaylandCompositor/private/qwaylandcompositor_p.h>
+#include <QtWaylandCompositor/private/qwaylandseat_p.h>
+#include <QtWaylandCompositor/private/qwaylandpointer_p.h>
 
+#include <QtCore/QPointF>
 #include <QDebug>
 
 QT_BEGIN_NAMESPACE
 
 namespace QtWayland {
 
-DataDevice::DataDevice(InputDevice *inputDevice)
-    : wl_data_device()
-    , m_compositor(inputDevice->compositor())
-    , m_inputDevice(inputDevice)
-    , m_selectionSource(0)
-    , m_dragClient(0)
-    , m_dragDataSource(0)
-    , m_dragFocus(0)
-    , m_dragFocusResource(0)
-    , m_dragIcon(0)
+DataDevice::DataDevice(QWaylandSeat *seat)
+    : m_compositor(seat->compositor())
+    , m_seat(seat)
 {
 }
 
-void DataDevice::setFocus(QtWaylandServer::wl_keyboard::Resource *focusResource)
+void DataDevice::setFocus(QWaylandClient *focusClient)
 {
-    if (!focusResource)
+    if (!focusClient)
         return;
 
-    Resource *resource = resourceMap().value(focusResource->client());
+    Resource *resource = resourceMap().value(focusClient->client());
 
     if (!resource)
         return;
@@ -88,33 +82,40 @@ void DataDevice::setFocus(QtWaylandServer::wl_keyboard::Resource *focusResource)
     }
 }
 
-void DataDevice::setDragFocus(QWaylandSurfaceView *focus, const QPointF &localPosition)
+void DataDevice::sourceDestroyed(DataSource *source)
+{
+    if (m_selectionSource == source)
+        m_selectionSource = nullptr;
+}
+
+#if QT_CONFIG(draganddrop)
+void DataDevice::setDragFocus(QWaylandSurface *focus, const QPointF &localPosition)
 {
     if (m_dragFocusResource) {
         send_leave(m_dragFocusResource->handle);
-        m_dragFocus = 0;
-        m_dragFocusResource = 0;
+        m_dragFocus = nullptr;
+        m_dragFocusResource = nullptr;
     }
 
     if (!focus)
         return;
 
-    if (!m_dragDataSource && m_dragClient != focus->surface()->handle()->resource()->client())
+    if (!m_dragDataSource && m_dragClient != focus->waylandClient())
         return;
 
-    Resource *resource = resourceMap().value(focus->surface()->handle()->resource()->client());
+    Resource *resource = resourceMap().value(focus->waylandClient());
 
     if (!resource)
         return;
 
-    uint32_t serial = wl_display_next_serial(m_compositor->wl_display());
+    uint32_t serial = m_compositor->nextSerial();
 
-    DataOffer *offer = m_dragDataSource ? new DataOffer(m_dragDataSource, resource) : 0;
+    DataOffer *offer = m_dragDataSource ? new DataOffer(m_dragDataSource, resource) : nullptr;
 
     if (m_dragDataSource && !offer)
         return;
 
-    send_enter(resource->handle, serial, focus->surface()->handle()->resource()->handle,
+    send_enter(resource->handle, serial, focus->resource(),
                wl_fixed_from_double(localPosition.x()), wl_fixed_from_double(localPosition.y()),
                offer->resource()->handle);
 
@@ -122,102 +123,92 @@ void DataDevice::setDragFocus(QWaylandSurfaceView *focus, const QPointF &localPo
     m_dragFocusResource = resource;
 }
 
-QWaylandSurfaceView *DataDevice::dragIcon() const
+QWaylandSurface *DataDevice::dragIcon() const
 {
     return m_dragIcon;
 }
 
-void DataDevice::sourceDestroyed(DataSource *source)
+QWaylandSurface *DataDevice::dragOrigin() const
 {
-    if (m_selectionSource == source)
-        m_selectionSource = 0;
+    return m_dragOrigin;
 }
 
-void DataDevice::focus()
+void DataDevice::dragMove(QWaylandSurface *target, const QPointF &pos)
 {
-    QWaylandSurfaceView *focus = m_compositor->waylandCompositor()->pickView(m_pointer->currentPosition());
-
-    if (focus != m_dragFocus)
-        setDragFocus(focus, m_compositor->waylandCompositor()->mapToView(focus, m_pointer->currentPosition()));
+    if (target != m_dragFocus)
+        setDragFocus(target, pos);
+    if (!target)
+        return;
+    uint time = m_compositor->currentTimeMsecs(); //### should be serial
+    send_motion(m_dragFocusResource->handle, time,
+                wl_fixed_from_double(pos.x()), wl_fixed_from_double(pos.y()));
 }
 
-void DataDevice::motion(uint32_t time)
+void DataDevice::drop()
 {
-    if (m_dragIcon) {
-        m_dragIcon->setPos(m_pointer->currentPosition());
-    }
-
-    if (m_dragFocusResource && m_dragFocus) {
-        const QPointF &surfacePoint = m_compositor->waylandCompositor()->mapToView(m_dragFocus, m_pointer->currentPosition());
-        qDebug() << Q_FUNC_INFO << m_pointer->currentPosition() << surfacePoint;
-        send_motion(m_dragFocusResource->handle, time,
-                    wl_fixed_from_double(surfacePoint.x()), wl_fixed_from_double(surfacePoint.y()));
-    }
-}
-
-void DataDevice::button(uint32_t time, Qt::MouseButton button, uint32_t state)
-{
-    Q_UNUSED(time);
-
-    if (m_dragFocusResource &&
-        m_pointer->grabButton() == button &&
-        state == Pointer::button_state_released)
+    if (m_dragFocusResource) {
         send_drop(m_dragFocusResource->handle);
-
-    if (!m_pointer->buttonPressed() &&
-        state == Pointer::button_state_released) {
-
-        if (m_dragIcon) {
-            m_dragIcon = 0;
-            Q_EMIT m_inputDevice->dragHandle()->iconChanged();
-        }
-
-        setDragFocus(0, QPointF());
-        m_pointer->endGrab();
+        setDragFocus(nullptr, QPoint());
+    } else {
+        m_dragDataSource->cancel();
     }
+    m_dragOrigin = nullptr;
+    setDragIcon(nullptr);
 }
 
+void DataDevice::cancelDrag()
+{
+    setDragFocus(nullptr, QPoint());
+}
+    
 void DataDevice::data_device_start_drag(Resource *resource, struct ::wl_resource *source, struct ::wl_resource *origin, struct ::wl_resource *icon, uint32_t serial)
 {
-    if (m_inputDevice->pointerDevice()->grabSerial() == serial) {
-        if (!m_inputDevice->pointerDevice()->buttonPressed() ||
-             m_inputDevice->pointerDevice()->focusSurface()->surface()->handle() != Surface::fromResource(origin))
-            return;
+    m_dragClient = resource->client();
+    m_dragDataSource = source ? DataSource::fromResource(source) : nullptr;
+    m_dragOrigin = QWaylandSurface::fromResource(origin);
+    QWaylandDrag *drag = m_seat->drag();
+    setDragIcon(icon ? QWaylandSurface::fromResource(icon) : nullptr);
+    Q_EMIT drag->dragStarted();
+    Q_EMIT m_dragOrigin->dragStarted(drag);
 
-        m_dragClient = resource->client();
-        m_dragDataSource = source != 0 ? DataSource::fromResource(source) : 0;
-        m_dragIcon = icon != 0 ? m_compositor->waylandCompositor()->createView(Surface::fromResource(icon)->waylandSurface()) : 0;
-        Q_EMIT m_inputDevice->dragHandle()->iconChanged();
-
-        m_inputDevice->pointerDevice()->setFocus(0, QPointF());
-        m_inputDevice->pointerDevice()->startGrab(this);
-    }
+    Q_UNUSED(serial);
+    //### need to verify that we have an implicit grab with this serial
 }
+
+void DataDevice::setDragIcon(QWaylandSurface *icon)
+{
+    if (icon == m_dragIcon)
+        return;
+    m_dragIcon = icon;
+    Q_EMIT m_seat->drag()->iconChanged();
+}
+#endif // QT_CONFIG(draganddrop)
 
 void DataDevice::data_device_set_selection(Resource *, struct ::wl_resource *source, uint32_t serial)
 {
     Q_UNUSED(serial);
 
-    DataSource *dataSource = source ? DataSource::fromResource(source) : 0;
+    DataSource *dataSource = source ? DataSource::fromResource(source) : nullptr;
 
     if (m_selectionSource)
         m_selectionSource->cancel();
 
     m_selectionSource = dataSource;
-    m_compositor->dataDeviceManager()->setCurrentSelectionSource(m_selectionSource);
+    QWaylandCompositorPrivate::get(m_compositor)->dataDeviceManager()->setCurrentSelectionSource(m_selectionSource);
     if (m_selectionSource)
         m_selectionSource->setDevice(this);
 
-    QtWaylandServer::wl_keyboard::Resource *focusResource = m_inputDevice->keyboardDevice()->focusResource();
-    Resource *resource = focusResource ? resourceMap().value(focusResource->client()) : 0;
+    QWaylandClient *focusClient = m_seat->keyboard()->focusClient();
+    Resource *resource = focusClient ? resourceMap().value(focusClient->client()) : 0;
 
     if (resource && m_selectionSource) {
         DataOffer *offer = new DataOffer(m_selectionSource, resource);
         send_selection(resource->handle, offer->resource()->handle);
     } else if (resource) {
-        send_selection(resource->handle, 0);
+        send_selection(resource->handle, nullptr);
     }
 }
+
 
 }
 

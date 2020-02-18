@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -34,15 +40,18 @@
 #include "qwaylandnativeinterface_p.h"
 #include "qwaylanddisplay_p.h"
 #include "qwaylandwindow_p.h"
+#include "qwaylandshellintegration_p.h"
+#include "qwaylandsubsurface_p.h"
 #include "qwaylandextendedsurface_p.h"
 #include "qwaylandintegration_p.h"
 #include "qwaylanddisplay_p.h"
 #include "qwaylandwindowmanagerintegration_p.h"
 #include "qwaylandscreen_p.h"
-#include "qwaylandwlshellsurface_p.h"
 #include <QtGui/private/qguiapplication_p.h>
 #include <QtGui/QScreen>
 #include <QtWaylandClient/private/qwaylandclientbufferintegration_p.h>
+
+#include <QtPlatformHeaders/qwaylandwindowfunctions.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -67,7 +76,7 @@ void *QWaylandNativeInterface::nativeResourceForIntegration(const QByteArray &re
     if (lowerCaseResource == "egldisplay" && m_integration->clientBufferIntegration())
         return m_integration->clientBufferIntegration()->nativeResource(QWaylandClientBufferIntegration::EglDisplay);
 
-    return 0;
+    return nullptr;
 }
 
 void *QWaylandNativeInterface::nativeResourceForWindow(const QByteArray &resourceString, QWindow *window)
@@ -79,22 +88,17 @@ void *QWaylandNativeInterface::nativeResourceForWindow(const QByteArray &resourc
     if (lowerCaseResource == "compositor")
         return const_cast<wl_compositor *>(m_integration->display()->wl_compositor());
     if (lowerCaseResource == "surface") {
-        QWaylandWindow* ww = static_cast<QWaylandWindow*>(window->handle());
-        return ww ? ww->object() : NULL;
+        QWaylandWindow *w = static_cast<QWaylandWindow*>(window->handle());
+        return w ? w->object() : nullptr;
     }
-    if (lowerCaseResource == "wl_shell_surface") {
-        QWaylandWindow *w = (QWaylandWindow *) window->handle();
-        if (!w)
-            return NULL;
-        QWaylandWlShellSurface *s = qobject_cast<QWaylandWlShellSurface *>(w->shellSurface());
-        if (!s)
-            return NULL;
-        return s->object();
-    }
+
     if (lowerCaseResource == "egldisplay" && m_integration->clientBufferIntegration())
         return m_integration->clientBufferIntegration()->nativeResource(QWaylandClientBufferIntegration::EglDisplay);
 
-    return NULL;
+    if (auto shellIntegration = m_integration->shellIntegration())
+        return shellIntegration->nativeResourceForWindow(resourceString, window);
+
+    return nullptr;
 }
 
 void *QWaylandNativeInterface::nativeResourceForScreen(const QByteArray &resourceString, QScreen *screen)
@@ -104,12 +108,13 @@ void *QWaylandNativeInterface::nativeResourceForScreen(const QByteArray &resourc
     if (lowerCaseResource == "output")
         return ((QWaylandScreen *) screen->handle())->output();
 
-    return NULL;
+    return nullptr;
 }
 
-#ifndef QT_NO_OPENGL
+#if QT_CONFIG(opengl)
 void *QWaylandNativeInterface::nativeResourceForContext(const QByteArray &resource, QOpenGLContext *context)
 {
+#if QT_CONFIG(opengl)
     QByteArray lowerCaseResource = resource.toLower();
 
     if (lowerCaseResource == "eglconfig" && m_integration->clientBufferIntegration())
@@ -120,10 +125,11 @@ void *QWaylandNativeInterface::nativeResourceForContext(const QByteArray &resour
 
     if (lowerCaseResource == "egldisplay" && m_integration->clientBufferIntegration())
         return m_integration->clientBufferIntegration()->nativeResourceForContext(QWaylandClientBufferIntegration::EglDisplay, context->handle());
+#endif
 
-    return 0;
+    return nullptr;
 }
-#endif // QT_NO_OPENGL
+#endif  // opengl
 
 QVariantMap QWaylandNativeInterface::windowProperties(QPlatformWindow *window) const
 {
@@ -152,6 +158,44 @@ void QWaylandNativeInterface::setWindowProperty(QPlatformWindow *window, const Q
 void QWaylandNativeInterface::emitWindowPropertyChanged(QPlatformWindow *window, const QString &name)
 {
     emit windowPropertyChanged(window,name);
+}
+
+QFunctionPointer QWaylandNativeInterface::platformFunction(const QByteArray &resource) const
+{
+    if (resource == QWaylandWindowFunctions::setSyncIdentifier()) {
+        return QFunctionPointer(setSync);
+    } else if (resource == QWaylandWindowFunctions::setDeSyncIdentifier()) {
+        return QFunctionPointer(setDeSync);
+    } else if (resource == QWaylandWindowFunctions::isSyncIdentifier()) {
+        return QFunctionPointer(isSync);
+    }
+    return nullptr;
+}
+
+
+void QWaylandNativeInterface::setSync(QWindow *window)
+{
+    QWaylandWindow *ww = static_cast<QWaylandWindow*>(window->handle());
+    if (ww->subSurfaceWindow()) {
+        ww->subSurfaceWindow()->setSync();
+    }
+}
+
+void QWaylandNativeInterface::setDeSync(QWindow *window)
+{
+    QWaylandWindow *ww = static_cast<QWaylandWindow*>(window->handle());
+    if (ww->subSurfaceWindow()) {
+        ww->subSurfaceWindow()->setDeSync();
+    }
+}
+
+bool QWaylandNativeInterface::isSync(QWindow *window)
+{
+    QWaylandWindow *ww = static_cast<QWaylandWindow*>(window->handle());
+    if (ww->subSurfaceWindow()) {
+        return ww->subSurfaceWindow()->isSync();
+    }
+    return false;
 }
 
 }

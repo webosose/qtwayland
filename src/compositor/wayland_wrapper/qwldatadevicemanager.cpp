@@ -1,38 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -40,13 +39,14 @@
 
 #include "qwldatadevicemanager_p.h"
 
+#include <QtWaylandCompositor/QWaylandCompositor>
+
+#include <QtWaylandCompositor/private/qwaylandcompositor_p.h>
+#include <QtWaylandCompositor/private/qwaylandseat_p.h>
 #include "qwldatadevice_p.h"
 #include "qwldatasource_p.h"
-#include "qwlinputdevice_p.h"
-#include "qwlcompositor_p.h"
 #include "qwldataoffer_p.h"
-#include "qwlsurface_p.h"
-#include "qwaylandmimehelper.h"
+#include "qwaylandmimehelper_p.h"
 
 #include <QtCore/QDebug>
 #include <QtCore/QSocketNotifier>
@@ -58,13 +58,9 @@ QT_BEGIN_NAMESPACE
 
 namespace QtWayland {
 
-DataDeviceManager::DataDeviceManager(Compositor *compositor)
-    : QObject(0)
-    , wl_data_device_manager(compositor->wl_display(), 1)
+DataDeviceManager::DataDeviceManager(QWaylandCompositor *compositor)
+    : wl_data_device_manager(compositor->display(), 1)
     , m_compositor(compositor)
-    , m_current_selection_source(0)
-    , m_retainedReadNotifier(0)
-    , m_compositorOwnsSelection(false)
 {
 }
 
@@ -108,7 +104,7 @@ void DataDeviceManager::retain()
     QList<QString> offers = m_current_selection_source->mimeTypes();
     finishReadFromClient();
     if (m_retainedReadIndex >= offers.count()) {
-        m_compositor->feedRetainedSelectionData(&m_retainedData);
+        QWaylandCompositorPrivate::get(m_compositor)->feedRetainedSelectionData(&m_retainedData);
         return;
     }
     QString mimeType = offers.at(m_retainedReadIndex);
@@ -137,7 +133,7 @@ void DataDeviceManager::finishReadFromClient(bool exhausted)
             // or else clients may SIGPIPE.
             m_obsoleteRetainedReadNotifiers.append(m_retainedReadNotifier);
         }
-        m_retainedReadNotifier = 0;
+        m_retainedReadNotifier = nullptr;
     }
 }
 
@@ -185,7 +181,7 @@ DataSource *DataDeviceManager::currentSelectionSource()
 
 struct wl_display *DataDeviceManager::display() const
 {
-    return m_compositor->wl_display();
+    return m_compositor->display();
 }
 
 void DataDeviceManager::overrideSelection(const QMimeData &mimeData)
@@ -198,15 +194,15 @@ void DataDeviceManager::overrideSelection(const QMimeData &mimeData)
     foreach (const QString &format, formats)
         m_retainedData.setData(format, mimeData.data(format));
 
-    m_compositor->feedRetainedSelectionData(&m_retainedData);
+    QWaylandCompositorPrivate::get(m_compositor)->feedRetainedSelectionData(&m_retainedData);
 
     m_compositorOwnsSelection = true;
 
-    InputDevice *dev = m_compositor->defaultInputDevice();
-    Surface *focusSurface = dev->keyboardFocus();
+    QWaylandSeat *dev = m_compositor->defaultSeat();
+    QWaylandSurface *focusSurface = dev->keyboardFocus();
     if (focusSurface)
         offerFromCompositorToClient(
-                    dev->dataDevice()->resourceMap().value(focusSurface->resource()->client())->handle);
+                    QWaylandSeatPrivate::get(dev)->dataDevice()->resourceMap().value(focusSurface->waylandClient())->handle);
 }
 
 bool DataDeviceManager::offerFromCompositorToClient(wl_resource *clientDataDeviceResource)
@@ -214,12 +210,12 @@ bool DataDeviceManager::offerFromCompositorToClient(wl_resource *clientDataDevic
     if (!m_compositorOwnsSelection)
         return false;
 
-    wl_client *client = clientDataDeviceResource->client;
+    wl_client *client = wl_resource_get_client(clientDataDeviceResource);
     //qDebug("compositor offers %d types to %p", m_retainedData.formats().count(), client);
 
     struct wl_resource *selectionOffer =
              wl_resource_create(client, &wl_data_offer_interface, -1, 0);
-    wl_resource_set_implementation(selectionOffer, &compositor_offer_interface, this, 0);
+    wl_resource_set_implementation(selectionOffer, &compositor_offer_interface, this, nullptr);
     wl_data_device_send_data_offer(clientDataDeviceResource, selectionOffer);
     foreach (const QString &format, m_retainedData.formats()) {
         QByteArray ba = format.toLatin1();
@@ -246,8 +242,8 @@ void DataDeviceManager::data_device_manager_create_data_source(Resource *resourc
 
 void DataDeviceManager::data_device_manager_get_data_device(Resource *resource, uint32_t id, struct ::wl_resource *seat)
 {
-    InputDevice *input_device = InputDevice::fromSeatResource(seat);
-    input_device->clientRequestedDataDevice(this, resource->client(), id);
+    QWaylandSeat *input_device = QWaylandSeat::fromSeatResource(seat);
+    QWaylandSeatPrivate::get(input_device)->clientRequestedDataDevice(this, resource->client(), id);
 }
 
 void DataDeviceManager::comp_accept(wl_client *, wl_resource *, uint32_t, const char *)
@@ -257,7 +253,7 @@ void DataDeviceManager::comp_accept(wl_client *, wl_resource *, uint32_t, const 
 void DataDeviceManager::comp_receive(wl_client *client, wl_resource *resource, const char *mime_type, int32_t fd)
 {
     Q_UNUSED(client);
-    DataDeviceManager *self = static_cast<DataDeviceManager *>(resource->data);
+    DataDeviceManager *self = static_cast<DataDeviceManager *>(wl_resource_get_user_data(resource));
     //qDebug("client %p wants data for type %s from compositor", client, mime_type);
     QByteArray content = QWaylandMimeHelper::getByteArray(&self->m_retainedData, QString::fromLatin1(mime_type));
     if (!content.isEmpty()) {
@@ -271,6 +267,9 @@ void DataDeviceManager::comp_receive(wl_client *client, wl_resource *resource, c
 void DataDeviceManager::comp_destroy(wl_client *, wl_resource *)
 {
 }
+
+QT_WARNING_DISABLE_GCC("-Wmissing-field-initializers")
+QT_WARNING_DISABLE_CLANG("-Wmissing-field-initializers")
 
 const struct wl_data_offer_interface DataDeviceManager::compositor_offer_interface = {
     DataDeviceManager::comp_accept,

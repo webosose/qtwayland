@@ -1,42 +1,42 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandClient module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
+
 
 #ifndef QWAYLANDINPUTCONTEXT_H
 #define QWAYLANDINPUTCONTEXT_H
@@ -54,36 +54,77 @@
 
 #include <qpa/qplatforminputcontext.h>
 
-#include <QtWaylandClient/private/qwayland-text.h>
+#include <QLoggingCategory>
+#include <QPointer>
+#include <QRectF>
+#include <QVector>
+
+#include <QtWaylandClient/private/qwayland-text-input-unstable-v2.h>
+#include <qwaylandinputmethodeventbuilder_p.h>
 
 QT_BEGIN_NAMESPACE
+
+Q_DECLARE_LOGGING_CATEGORY(qLcQpaInputMethods)
 
 namespace QtWaylandClient {
 
 class QWaylandDisplay;
 
-class QWaylandTextInput : public QtWayland::wl_text_input
+class QWaylandTextInput : public QtWayland::zwp_text_input_v2
 {
 public:
-    QWaylandTextInput(struct ::wl_text_input *text_input);
-
-    QString commitString() const;
+    QWaylandTextInput(QWaylandDisplay *display, struct ::zwp_text_input_v2 *text_input);
+    ~QWaylandTextInput() override;
 
     void reset();
-    void updateState();
+    void commit();
+    void updateState(Qt::InputMethodQueries queries, uint32_t flags);
+
+    void setCursorInsidePreedit(int cursor);
+
+    bool isInputPanelVisible() const;
+    QRectF keyboardRect() const;
+
+    QLocale locale() const;
+    Qt::LayoutDirection inputDirection() const;
 
 protected:
-    void text_input_preedit_string(uint32_t serial, const QString &text, const QString &commit) Q_DECL_OVERRIDE;
-    void text_input_commit_string(uint32_t serial, const QString &text) Q_DECL_OVERRIDE;
-    void text_input_enter(wl_surface *surface) Q_DECL_OVERRIDE;
-    void text_input_leave() Q_DECL_OVERRIDE;
-    void text_input_keysym(uint32_t serial, uint32_t time, uint32_t sym, uint32_t state, uint32_t modifiers) Q_DECL_OVERRIDE;
+    void zwp_text_input_v2_enter(uint32_t serial, struct ::wl_surface *surface) override;
+    void zwp_text_input_v2_leave(uint32_t serial, struct ::wl_surface *surface) override;
+    void zwp_text_input_v2_modifiers_map(wl_array *map) override;
+    void zwp_text_input_v2_input_panel_state(uint32_t state, int32_t x, int32_t y, int32_t width, int32_t height) override;
+    void zwp_text_input_v2_preedit_string(const QString &text, const QString &commit) override;
+    void zwp_text_input_v2_preedit_styling(uint32_t index, uint32_t length, uint32_t style) override;
+    void zwp_text_input_v2_preedit_cursor(int32_t index) override;
+    void zwp_text_input_v2_commit_string(const QString &text) override;
+    void zwp_text_input_v2_cursor_position(int32_t index, int32_t anchor) override;
+    void zwp_text_input_v2_delete_surrounding_text(uint32_t before_length, uint32_t after_length) override;
+    void zwp_text_input_v2_keysym(uint32_t time, uint32_t sym, uint32_t state, uint32_t modifiers) override;
+    void zwp_text_input_v2_language(const QString &language) override;
+    void zwp_text_input_v2_text_direction(uint32_t direction) override;
+    void zwp_text_input_v2_input_method_changed(uint32_t serial, uint32_t flags) override;
 
 private:
-    QString m_commit;
+    Qt::KeyboardModifiers modifiersToQtModifiers(uint32_t modifiers);
 
-    uint32_t m_serial;
-    uint32_t m_resetSerial;
+    QWaylandDisplay *m_display = nullptr;
+    QWaylandInputMethodEventBuilder m_builder;
+
+    QVector<Qt::KeyboardModifier> m_modifiersMap;
+
+    uint32_t m_serial = 0;
+    struct ::wl_surface *m_surface = nullptr;
+
+    QString m_preeditCommit;
+
+    bool m_inputPanelVisible = false;
+    QRectF m_keyboardRectangle;
+    QLocale m_locale;
+    Qt::LayoutDirection m_inputDirection = Qt::LayoutDirectionAuto;
+
+    struct ::wl_callback *m_resetCallback = nullptr;
+    static const wl_callback_listener callbackListener;
+    static void resetCallback(void *data, struct wl_callback *wl_callback, uint32_t time);
 };
 
 class QWaylandInputContext : public QPlatformInputContext
@@ -91,25 +132,31 @@ class QWaylandInputContext : public QPlatformInputContext
     Q_OBJECT
 public:
     explicit QWaylandInputContext(QWaylandDisplay *display);
+    ~QWaylandInputContext() override;
 
-    bool isValid() const Q_DECL_OVERRIDE;
+    bool isValid() const override;
 
-    void reset() Q_DECL_OVERRIDE;
-    void commit() Q_DECL_OVERRIDE;
-    void update(Qt::InputMethodQueries) Q_DECL_OVERRIDE;
-    void invokeAction(QInputMethod::Action, int cursorPosition) Q_DECL_OVERRIDE;
+    void reset() override;
+    void commit() override;
+    void update(Qt::InputMethodQueries) override;
 
-    void showInputPanel() Q_DECL_OVERRIDE;
-    void hideInputPanel() Q_DECL_OVERRIDE;
-    bool isInputPanelVisible() const Q_DECL_OVERRIDE;
+    void invokeAction(QInputMethod::Action, int cursorPosition) override;
 
-    void setFocusObject(QObject *object) Q_DECL_OVERRIDE;
+    void showInputPanel() override;
+    void hideInputPanel() override;
+    bool isInputPanelVisible() const override;
+    QRectF keyboardRect() const override;
+
+    QLocale locale() const override;
+    Qt::LayoutDirection inputDirection() const override;
+
+    void setFocusObject(QObject *object) override;
 
 private:
-    bool ensureTextInput();
+    QWaylandTextInput *textInput() const;
 
-    QWaylandDisplay *mDisplay;
-    QScopedPointer<QWaylandTextInput> mTextInput;
+    QWaylandDisplay *mDisplay = nullptr;
+    QPointer<QWindow> mCurrentWindow;
 };
 
 }

@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -35,22 +41,13 @@
 
 #include <QtWaylandClient/private/qwaylanddisplay_p.h>
 #include <QtWaylandClient/private/qwaylandwindow_p.h>
+#include <QtWaylandClient/private/qwaylandsubsurface_p.h>
 #include <QtWaylandClient/private/qwaylandabstractdecoration_p.h>
 #include <QtWaylandClient/private/qwaylandintegration_p.h>
 #include "qwaylandeglwindow.h"
-#include "qtwaylandclienttracer.h"
+
 #include <QDebug>
-
-#if (QT_VERSION < QT_VERSION_CHECK(5, 8, 0))
-#include <QtPlatformSupport/private/qeglconvenience_p.h>
-#else
 #include <QtEglSupport/private/qeglconvenience_p.h>
-#endif
-
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 7, 0))
-#include <dlfcn.h>
-#endif
-
 #include <QtGui/private/qopenglcontext_p.h>
 #include <QtGui/private/qopengltexturecache_p.h>
 #include <QtGui/private/qguiapplication_p.h>
@@ -59,6 +56,10 @@
 #include <QtGui/QSurfaceFormat>
 #include <QtGui/QOpenGLShaderProgram>
 #include <QtGui/QOpenGLFunctions>
+
+#include <QtCore/qmutex.h>
+
+#include <dlfcn.h>
 
 // Constants from EGL_KHR_create_context
 #ifndef EGL_CONTEXT_MINOR_VERSION_KHR
@@ -144,7 +145,7 @@ public:
     }
     void blit(QWaylandEglWindow *window)
     {
-        PMTRACE_QTWLCLI_FUNCTION;
+        Q_ASSERT(window->wl_surface::isInitialized());
         QOpenGLTextureCache *cache = QOpenGLTextureCache::cacheForContext(m_context->context());
 
         QRect windowRect = window->window()->frameGeometry();
@@ -219,8 +220,8 @@ public:
         m_blitProgram->disableAttributeArray(1);
     }
 
-    QOpenGLShaderProgram *m_blitProgram;
-    QWaylandGLContext *m_context;
+    QOpenGLShaderProgram *m_blitProgram = nullptr;
+    QWaylandGLContext *m_context = nullptr;
 };
 
 
@@ -229,14 +230,12 @@ QWaylandGLContext::QWaylandGLContext(EGLDisplay eglDisplay, QWaylandDisplay *dis
     : QPlatformOpenGLContext()
     , m_eglDisplay(eglDisplay)
     , m_display(display)
-    , m_blitter(0)
-    , mUseNativeDefaultFbo(false)
 {
     QSurfaceFormat fmt = format;
     if (static_cast<QWaylandIntegration *>(QGuiApplicationPrivate::platformIntegration())->display()->supportsWindowDecoration())
         fmt.setAlphaBufferSize(8);
     m_config = q_configFromGLFormat(m_eglDisplay, fmt);
-    m_format = q_glFormatFromConfig(m_eglDisplay, m_config);
+    m_format = q_glFormatFromConfig(m_eglDisplay, m_config, fmt);
     m_shareEGLContext = share ? static_cast<QWaylandGLContext *>(share)->eglContext() : EGL_NO_CONTEXT;
 
     QVector<EGLint> eglContextAttrs;
@@ -261,10 +260,18 @@ QWaylandGLContext::QWaylandGLContext(EGLDisplay eglDisplay, QWaylandDisplay *dis
         }
         // Profiles are OpenGL only and mandatory in 3.2+. The value is silently ignored for < 3.2.
         if (m_format.renderableType() == QSurfaceFormat::OpenGL) {
-            eglContextAttrs.append(EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR);
-            eglContextAttrs.append(format.profile() == QSurfaceFormat::CoreProfile
-                                ? EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR
-                                : EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT_KHR);
+            switch (format.profile()) {
+            case QSurfaceFormat::NoProfile:
+                break;
+            case QSurfaceFormat::CoreProfile:
+                eglContextAttrs.append(EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR);
+                eglContextAttrs.append(EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR);
+                break;
+            case QSurfaceFormat::CompatibilityProfile:
+                eglContextAttrs.append(EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR);
+                eglContextAttrs.append(EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT_KHR);
+                break;
+            }
         }
     }
     eglContextAttrs.append(EGL_NONE);
@@ -301,6 +308,19 @@ QWaylandGLContext::QWaylandGLContext(EGLDisplay eglDisplay, QWaylandDisplay *dis
         return;
     }
 
+    EGLint a = EGL_MIN_SWAP_INTERVAL;
+    EGLint b = EGL_MAX_SWAP_INTERVAL;
+    if (!eglGetConfigAttrib(m_eglDisplay, m_config, a, &a) ||
+        !eglGetConfigAttrib(m_eglDisplay, m_config, b, &b) ||
+        a > 0) {
+       mSupportNonBlockingSwap = false;
+    }
+    if (!mSupportNonBlockingSwap) {
+        qWarning(lcQpaWayland) << "Non-blocking swap buffers not supported."
+                               << "Subsurface rendering can be affected."
+                               << "It may also cause the event loop to freeze in some situations";
+    }
+
     updateGLFormat();
 }
 
@@ -315,7 +335,7 @@ void QWaylandGLContext::updateGLFormat()
     EGLSurface prevSurfaceDraw = eglGetCurrentSurface(EGL_DRAW);
     EGLSurface prevSurfaceRead = eglGetCurrentSurface(EGL_READ);
 
-    wl_surface *wlSurface = m_display->createSurface(Q_NULLPTR);
+    wl_surface *wlSurface = m_display->createSurface(nullptr);
     wl_egl_window *eglWindow = wl_egl_window_create(wlSurface, 1, 1);
     EGLSurface eglSurface = eglCreateWindowSurface(m_eglDisplay, m_config, eglWindow, 0);
 
@@ -382,10 +402,16 @@ bool QWaylandGLContext::makeCurrent(QPlatformSurface *surface)
     QWaylandEglWindow *window = static_cast<QWaylandEglWindow *>(surface);
     EGLSurface eglSurface = window->eglSurface();
 
-    if (eglSurface != EGL_NO_SURFACE && eglGetCurrentContext() == m_context && eglGetCurrentSurface(EGL_DRAW) == eglSurface)
+    if (!window->needToUpdateContentFBO() && (eglSurface != EGL_NO_SURFACE)) {
+        if (!eglMakeCurrent(m_eglDisplay, eglSurface, eglSurface, m_context)) {
+            qWarning("QWaylandGLContext::makeCurrent: eglError: %x, this: %p \n", eglGetError(), this);
+            return false;
+        }
         return true;
+    }
 
-    window->setCanResize(false);
+    if (window->isExposed())
+        window->setCanResize(false);
     // Core profiles mandate the use of VAOs when rendering. We would then need to use one
     // in DecorationsBlitter, but for that we would need a QOpenGLFunctions_3_2_Core instead
     // of the QOpenGLFunctions we use, but that would break when using a lower version context.
@@ -405,6 +431,9 @@ bool QWaylandGLContext::makeCurrent(QPlatformSurface *surface)
         return false;
     }
 
+    //### setCurrentContext will be called in QOpenGLContext::makeCurrent after this function
+    // returns, but that's too late, as we need a current context in order to bind the content FBO.
+    QOpenGLContextPrivate::setCurrentContext(context());
     window->bindContentFBO();
 
     return true;
@@ -503,7 +532,7 @@ private:
         GLint stride;
         GLenum type;
         bool normalized;
-        void *pointer;
+        void *pointer = nullptr;
     } m_vertexAttribs[STATE_GUARD_VERTEX_ATTRIB_COUNT];
     GLenum m_minFilter;
     GLenum m_magFilter;
@@ -513,7 +542,6 @@ private:
 
 void QWaylandGLContext::swapBuffers(QPlatformSurface *surface)
 {
-    PMTRACE_QTWLCLI_FUNCTION;
     QWaylandEglWindow *window = static_cast<QWaylandEglWindow *>(surface);
 
     EGLSurface eglSurface = window->eglSurface();
@@ -530,6 +558,14 @@ void QWaylandGLContext::swapBuffers(QPlatformSurface *surface)
         m_blitter->blit(window);
     }
 
+    int swapInterval = mSupportNonBlockingSwap ? 0 : m_format.swapInterval();
+    eglSwapInterval(m_eglDisplay, swapInterval);
+    if (swapInterval == 0 && m_format.swapInterval() > 0) {
+        // Emulating a blocking swap
+        glFlush(); // Flush before waiting so we can swap more quickly when the frame event arrives
+        window->waitForFrameSync(100);
+    }
+    window->handleUpdate();
     eglSwapBuffers(m_eglDisplay, eglSurface);
 
     window->setCanResize(true);
@@ -553,12 +589,6 @@ bool QWaylandGLContext::isValid() const
     return m_context != EGL_NO_CONTEXT;
 }
 
-#if (QT_VERSION < QT_VERSION_CHECK(5, 7, 0))
-QFunctionPointer QWaylandGLContext::getProcAddress(const QByteArray &procName)
-{
-    return eglGetProcAddress(procName.constData());
-}
-#else
 QFunctionPointer QWaylandGLContext::getProcAddress(const char *procName)
 {
     QFunctionPointer proc = (QFunctionPointer) eglGetProcAddress(procName);
@@ -566,7 +596,6 @@ QFunctionPointer QWaylandGLContext::getProcAddress(const char *procName)
         proc = (QFunctionPointer) dlsym(RTLD_DEFAULT, procName);
     return proc;
 }
-#endif
 
 EGLConfig QWaylandGLContext::eglConfig() const
 {

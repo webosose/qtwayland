@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the plugins of the Qt Toolkit.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -34,53 +40,82 @@
 #ifndef QWAYLANDBUFFERREF_H
 #define QWAYLANDBUFFERREF_H
 
+#include <QtWaylandCompositor/qtwaylandcompositorglobal.h>
 #include <QImage>
 
-#ifdef QT_COMPOSITOR_WAYLAND_GL
+#if QT_CONFIG(opengl)
 #include <QtGui/qopengl.h>
 #endif
 
-#include <QtCompositor/qwaylandexport.h>
+#include <QtWaylandCompositor/QWaylandSurface>
+#include <QtWaylandCompositor/qtwaylandcompositorglobal.h>
+
+struct wl_resource;
 
 QT_BEGIN_NAMESPACE
 
+class QOpenGLTexture;
+
 namespace QtWayland
 {
-    class SurfaceBuffer;
+    class ClientBuffer;
 }
 
-class Q_COMPOSITOR_EXPORT QWaylandBufferRef
+class Q_WAYLAND_COMPOSITOR_EXPORT QWaylandBufferRef
 {
 public:
     QWaylandBufferRef();
-    explicit QWaylandBufferRef(QtWayland::SurfaceBuffer *buffer);
     QWaylandBufferRef(const QWaylandBufferRef &ref);
     ~QWaylandBufferRef();
 
     QWaylandBufferRef &operator=(const QWaylandBufferRef &ref);
+    bool isNull() const;
+    bool hasBuffer() const;
+    bool hasContent() const;
+    bool isDestroyed() const;
     bool operator==(const QWaylandBufferRef &ref);
-    operator bool() const;
-    bool isShm() const;
+    bool operator!=(const QWaylandBufferRef &ref);
 
+    struct wl_resource *wl_buffer() const;
+
+    QSize size() const;
+    QWaylandSurface::Origin origin() const;
+
+    enum BufferType {
+        BufferType_Null,
+        BufferType_SharedMemory,
+        BufferType_Egl
+    };
+
+    enum BufferFormatEgl {
+        BufferFormatEgl_Null,
+        BufferFormatEgl_RGB,
+        BufferFormatEgl_RGBA,
+        BufferFormatEgl_EXTERNAL_OES,
+        BufferFormatEgl_Y_U_V,
+        BufferFormatEgl_Y_UV,
+        BufferFormatEgl_Y_XUXV
+    };
+
+    BufferType bufferType() const;
+    BufferFormatEgl bufferFormatEgl() const;
+
+    bool isSharedMemory() const;
     QImage image() const;
-    void *waylandBuffer() const;
 
-#ifdef QT_COMPOSITOR_WAYLAND_GL
-    /**
-     * There must be a GL context bound when calling this function.
-     * The texture will be automatically destroyed when the last QWaylandBufferRef
-     * referring to the same underlying buffer will be destroyed or reset.
-     */
-    GLuint createTexture();
-    GLenum textureTarget() const;
-    void updateTexture();
-    void destroyTexture();
-    void *nativeBuffer() const;
+#if QT_CONFIG(opengl)
+    QOpenGLTexture *toOpenGLTexture(int plane = 0) const;
 #endif
 
+    quintptr lockNativeBuffer();
+    void unlockNativeBuffer(quintptr handle);
+
 private:
+    explicit QWaylandBufferRef(QtWayland::ClientBuffer *buffer);
+    QtWayland::ClientBuffer *buffer() const;
     class QWaylandBufferRefPrivate *const d;
     friend class QWaylandBufferRefPrivate;
+    friend class QWaylandSurfacePrivate;
 };
 
 QT_END_NAMESPACE

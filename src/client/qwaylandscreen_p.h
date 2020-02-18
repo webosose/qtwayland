@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,9 +52,11 @@
 //
 
 #include <qpa/qplatformscreen.h>
-#include <QtWaylandClient/private/qwaylandclientexport_p.h>
+#include <QtWaylandClient/qtwaylandclientglobal.h>
 
 #include <QtWaylandClient/private/qwayland-wayland.h>
+#include <QtWaylandClient/private/qwayland-xdg-output-unstable-v1.h>
+
 
 QT_BEGIN_NAMESPACE
 
@@ -57,65 +65,82 @@ namespace QtWaylandClient {
 class QWaylandDisplay;
 class QWaylandCursor;
 
-class Q_WAYLAND_CLIENT_EXPORT QWaylandScreen : public QPlatformScreen, QtWayland::wl_output
+class Q_WAYLAND_CLIENT_EXPORT QWaylandScreen : public QPlatformScreen, QtWayland::wl_output, QtWayland::zxdg_output_v1
 {
 public:
     QWaylandScreen(QWaylandDisplay *waylandDisplay, int version, uint32_t id);
-    ~QWaylandScreen();
+    ~QWaylandScreen() override;
 
-    void init();
+    void initXdgOutput(QtWayland::zxdg_output_manager_v1 *xdgOutputManager);
+
     QWaylandDisplay *display() const;
 
-    QRect geometry() const Q_DECL_OVERRIDE;
-    int depth() const Q_DECL_OVERRIDE;
-    QImage::Format format() const Q_DECL_OVERRIDE;
+    QString manufacturer() const override;
+    QString model() const override;
 
-    QSizeF physicalSize() const Q_DECL_OVERRIDE;
+    QRect geometry() const override;
+    int depth() const override;
+    QImage::Format format() const override;
 
-    QDpi logicalDpi() const Q_DECL_OVERRIDE;
-    QList<QPlatformScreen *> virtualSiblings() const Q_DECL_OVERRIDE;
+    QSizeF physicalSize() const override;
 
-    void setOrientationUpdateMask(Qt::ScreenOrientations mask) Q_DECL_OVERRIDE;
+    QDpi logicalDpi() const override;
+    QList<QPlatformScreen *> virtualSiblings() const override;
 
-    Qt::ScreenOrientation orientation() const Q_DECL_OVERRIDE;
+    void setOrientationUpdateMask(Qt::ScreenOrientations mask) override;
+
+    Qt::ScreenOrientation orientation() const override;
     int scale() const;
-    qreal devicePixelRatio() const Q_DECL_OVERRIDE;
-    qreal refreshRate() const Q_DECL_OVERRIDE;
+    qreal devicePixelRatio() const override;
+    qreal refreshRate() const override;
 
-    QString name() const Q_DECL_OVERRIDE { return mOutputName; }
+    QString name() const override { return mOutputName; }
 
-    QPlatformCursor *cursor() const Q_DECL_OVERRIDE;
-    QWaylandCursor *waylandCursor() const { return mWaylandCursor; };
+#if QT_CONFIG(cursor)
+    QPlatformCursor *cursor() const override;
+    QWaylandCursor *waylandCursor();
+#endif
 
     uint32_t outputId() const { return m_outputId; }
-    ::wl_output *output() { return object(); }
+    ::wl_output *output() { return QtWayland::wl_output::object(); }
 
     static QWaylandScreen *waylandScreenFromWindow(QWindow *window);
+    static QWaylandScreen *fromWlOutput(::wl_output *output);
 
-protected:
-    void output_mode(uint32_t flags, int width, int height, int refresh) Q_DECL_OVERRIDE;
+private:
+    void output_mode(uint32_t flags, int width, int height, int refresh) override;
     void output_geometry(int32_t x, int32_t y,
                          int32_t width, int32_t height,
                          int subpixel,
                          const QString &make,
                          const QString &model,
-                         int32_t transform) Q_DECL_OVERRIDE;
-    void output_scale(int32_t factor) Q_DECL_OVERRIDE;
-    void output_done() Q_DECL_OVERRIDE;
+                         int32_t transform) override;
+    void output_scale(int32_t factor) override;
+    void output_done() override;
+
+    // XdgOutput
+    void zxdg_output_v1_logical_position(int32_t x, int32_t y) override;
+    void zxdg_output_v1_logical_size(int32_t width, int32_t height) override;
+    void zxdg_output_v1_done() override;
 
     int m_outputId;
-    QWaylandDisplay *mWaylandDisplay;
+    QWaylandDisplay *mWaylandDisplay = nullptr;
+    QString mManufacturer;
+    QString mModel;
     QRect mGeometry;
-    int mScale;
-    int mDepth;
-    int mRefreshRate;
-    int mTransform;
-    QImage::Format mFormat;
+    QRect mXdgGeometry;
+    int mScale = 1;
+    int mDepth = 32;
+    int mRefreshRate = 60000;
+    int mTransform = -1;
+    QImage::Format mFormat = QImage::Format_ARGB32_Premultiplied;
     QSize mPhysicalSize;
     QString mOutputName;
-    Qt::ScreenOrientation m_orientation;
+    Qt::ScreenOrientation m_orientation = Qt::PrimaryOrientation;
 
-    QWaylandCursor *mWaylandCursor;
+#if QT_CONFIG(cursor)
+    QScopedPointer<QWaylandCursor> mWaylandCursor;
+#endif
 };
 
 }

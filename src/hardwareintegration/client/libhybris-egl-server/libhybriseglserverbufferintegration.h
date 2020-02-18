@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -69,14 +75,15 @@ class LibHybrisServerBuffer : public QWaylandServerBuffer, public QtWayland::qt_
 public:
     LibHybrisServerBuffer(LibHybrisEglServerBufferIntegration *integration, int32_t numFds, wl_array *ints, int32_t name, int32_t width, int32_t height, int32_t stride, int32_t format);
     ~LibHybrisServerBuffer();
-    void bindTextureToBuffer() Q_DECL_OVERRIDE;
+    QOpenGLTexture* toOpenGlTexture() override;
 
 protected:
-    void libhybris_buffer_add_fd(int32_t fd) Q_DECL_OVERRIDE;
+    void libhybris_buffer_add_fd(int32_t fd) override;
 
 private:
-    LibHybrisEglServerBufferIntegration *m_integration;
+    LibHybrisEglServerBufferIntegration *m_integration = nullptr;
     EGLImageKHR m_image;
+    QOpenGLTexture *m_texture = nullptr;
     int m_numFds;
     QVector<int32_t> m_ints;
     QVector<int32_t> m_fds;
@@ -86,13 +93,12 @@ private:
 
 class LibHybrisEglServerBufferIntegration
     : public QWaylandServerBufferIntegration
-    , public QtWayland::wl_registry
     , public QtWayland::qt_libhybris_egl_server_buffer
 {
 public:
-    void initialize(QWaylandDisplay *display) Q_DECL_OVERRIDE;
+    void initialize(QWaylandDisplay *display) override;
 
-    virtual QWaylandServerBuffer *serverBuffer(struct qt_server_buffer *buffer) Q_DECL_OVERRIDE;
+    virtual QWaylandServerBuffer *serverBuffer(struct qt_server_buffer *buffer) override;
 
     inline EGLImageKHR eglCreateImageKHR(EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attrib_list);
     inline EGLBoolean eglDestroyImageKHR (EGLImageKHR image);
@@ -100,19 +106,27 @@ public:
     inline EGLBoolean eglHybrisCreateRemoteBuffer(EGLint width, EGLint height, EGLint usage, EGLint format, EGLint stride, int num_ints, int *ints, int num_fds, int *fds, EGLClientBuffer *buffer);
 
 protected:
-    void registry_global(uint32_t name, const QString &interface, uint32_t version) Q_DECL_OVERRIDE;
     void libhybris_egl_server_buffer_server_buffer_created(struct ::qt_libhybris_buffer *id, struct ::qt_server_buffer *qid,
-                                                           int32_t numFds, wl_array *ints, int32_t name, int32_t width, int32_t height, int32_t stride, int32_t format) Q_DECL_OVERRIDE;
+                                                           int32_t numFds, wl_array *ints, int32_t name, int32_t width, int32_t height, int32_t stride, int32_t format) override;
 private:
+    static void wlDisplayHandleGlobal(void *data, struct ::wl_registry *registry, uint32_t id,
+                                      const QString &interface, uint32_t version);
+    void initializeEgl();
+
     PFNEGLCREATEIMAGEKHRPROC m_egl_create_image;
     PFNEGLDESTROYIMAGEKHRPROC m_egl_destroy_image;
     PFNGLEGLIMAGETARGETTEXTURE2DOESPROC m_gl_egl_image_target_texture;
     PFNEGLHYBRISCREATEREMOTEBUFFERPROC m_egl_create_buffer;
+    QWaylandDisplay *m_display = nullptr;
     EGLDisplay m_egl_display;
+    bool m_egl_initialized = false;
 };
 
 EGLImageKHR LibHybrisEglServerBufferIntegration::eglCreateImageKHR(EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attrib_list)
 {
+    if (!m_egl_initialized)
+        initializeEgl();
+
     if (!m_egl_create_image) {
         qWarning("LibHybrisEglServerBufferIntegration: Trying to used unresolved function eglCreateImageKHR");
         return EGL_NO_IMAGE_KHR;

@@ -1,32 +1,38 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
-** Copyright (C) 2014 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2017 Jolla Ltd, author: <giulio.camuffo@jollamobile.com>
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the plugins of the Qt Toolkit.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,35 +52,159 @@
 // We mean it.
 //
 
-#include <QtCompositor/qwaylandexport.h>
+#include <QtWaylandCompositor/qtwaylandcompositorglobal.h>
 #include <private/qobject_p.h>
 
-#include <QtCompositor/private/qwlsurface_p.h>
+#include <private/qwlclientbuffer_p.h>
+#include <QtWaylandCompositor/qwaylandsurface.h>
+#include <QtWaylandCompositor/qwaylandbufferref.h>
+
+#include <QtWaylandCompositor/private/qwlregion_p.h>
+
+#include <QtCore/QVector>
+#include <QtCore/QRect>
+#include <QtGui/QRegion>
+#include <QtGui/QImage>
+#include <QtGui/QWindow>
+
+#include <QtCore/QTextStream>
+#include <QtCore/QMetaType>
+
+#include <wayland-util.h>
+
+#include <QtWaylandCompositor/private/qwayland-server-wayland.h>
 
 QT_BEGIN_NAMESPACE
 
 class QWaylandCompositor;
 class QWaylandSurface;
-class QWaylandSurfaceView;
+class QWaylandView;
 class QWaylandSurfaceInterface;
+class QWaylandInputMethodControl;
 
-class Q_COMPOSITOR_EXPORT QWaylandSurfacePrivate : public QObjectPrivate, public QtWayland::Surface
+namespace QtWayland {
+class FrameCallback;
+}
+
+class Q_WAYLAND_COMPOSITOR_EXPORT QWaylandSurfacePrivate : public QObjectPrivate, public QtWaylandServer::wl_surface
 {
-    Q_DECLARE_PUBLIC(QWaylandSurface)
 public:
-    QWaylandSurfacePrivate(wl_client *wlClient, quint32 id, int version, QWaylandCompositor *compositor, QWaylandSurface *surface);
-    void setType(QWaylandSurface::WindowType type);
-    void setTitle(const QString &title);
-    void setClassName(const QString &className);
+    static QWaylandSurfacePrivate *get(QWaylandSurface *surface);
 
-    bool closing;
-    int refCount;
+    QWaylandSurfacePrivate();
+    ~QWaylandSurfacePrivate() override;
 
-    QWaylandClient *client;
+    void ref();
+    void deref();
 
-    QWaylandSurface::WindowType windowType;
-    QList<QWaylandSurfaceView *> views;
-    QList<QWaylandSurfaceInterface *> interfaces;
+    void refView(QWaylandView *view);
+    void derefView(QWaylandView *view);
+
+    using QtWaylandServer::wl_surface::resource;
+
+    void removeFrameCallback(QtWayland::FrameCallback *callback);
+
+    void notifyViewsAboutDestruction();
+
+#ifndef QT_NO_DEBUG
+    static void addUninitializedSurface(QWaylandSurfacePrivate *surface);
+    static void removeUninitializedSurface(QWaylandSurfacePrivate *surface);
+    static bool hasUninitializedSurface();
+#endif
+
+    void initSubsurface(QWaylandSurface *parent, struct ::wl_client *client, int id, int version);
+    bool isSubsurface() const { return subsurface; }
+    QWaylandSurfacePrivate *parentSurface() const { return subsurface ? subsurface->parentSurface : nullptr; }
+
+protected:
+    void surface_destroy_resource(Resource *resource) override;
+
+    void surface_destroy(Resource *resource) override;
+    void surface_attach(Resource *resource,
+                        struct wl_resource *buffer, int x, int y) override;
+    void surface_damage(Resource *resource,
+                        int32_t x, int32_t y, int32_t width, int32_t height) override;
+    void surface_frame(Resource *resource,
+                       uint32_t callback) override;
+    void surface_set_opaque_region(Resource *resource,
+                                   struct wl_resource *region) override;
+    void surface_set_input_region(Resource *resource,
+                                  struct wl_resource *region) override;
+    void surface_commit(Resource *resource) override;
+    void surface_set_buffer_transform(Resource *resource, int32_t transform) override;
+    void surface_set_buffer_scale(Resource *resource, int32_t bufferScale) override;
+
+    QtWayland::ClientBuffer *getBuffer(struct ::wl_resource *buffer);
+
+public: //member variables
+    QWaylandCompositor *compositor = nullptr;
+    int refCount = 1;
+    QWaylandClient *client = nullptr;
+    QList<QWaylandView *> views;
+    QRegion damage;
+    QWaylandBufferRef bufferRef;
+    QWaylandSurfaceRole *role = nullptr;
+
+    struct {
+        QWaylandBufferRef buffer;
+        QRegion damage;
+        QPoint offset;
+        bool newlyAttached;
+        QRegion inputRegion;
+        int bufferScale;
+        QRegion opaqueRegion;
+    } pending;
+
+    QPoint lastLocalMousePos;
+    QPoint lastGlobalMousePos;
+
+    QList<QtWayland::FrameCallback *> pendingFrameCallbacks;
+    QList<QtWayland::FrameCallback *> frameCallbacks;
+
+    QList<QPointer<QWaylandSurface>> subsurfaceChildren;
+
+    QRegion inputRegion;
+    QRegion opaqueRegion;
+
+    QSize bufferSize;
+    int bufferScale = 1;
+    bool isCursorSurface = false;
+    bool destroyed = false;
+    bool hasContent = false;
+    bool isInitialized = false;
+    Qt::ScreenOrientation contentOrientation = Qt::PrimaryOrientation;
+    QWindow::Visibility visibility;
+#if QT_CONFIG(im)
+    QWaylandInputMethodControl *inputMethodControl = nullptr;
+#endif
+
+    class Subsurface : public QtWaylandServer::wl_subsurface
+    {
+    public:
+        Subsurface(QWaylandSurfacePrivate *s) : surface(s) {}
+        QWaylandSurfacePrivate *surfaceFromResource();
+
+    protected:
+        void subsurface_set_position(wl_subsurface::Resource *resource, int32_t x, int32_t y) override;
+        void subsurface_place_above(wl_subsurface::Resource *resource, struct wl_resource *sibling) override;
+        void subsurface_place_below(wl_subsurface::Resource *resource, struct wl_resource *sibling) override;
+        void subsurface_set_sync(wl_subsurface::Resource *resource) override;
+        void subsurface_set_desync(wl_subsurface::Resource *resource) override;
+
+    private:
+        friend class QWaylandSurfacePrivate;
+        QWaylandSurfacePrivate *surface = nullptr;
+        QWaylandSurfacePrivate *parentSurface = nullptr;
+        QPoint position;
+    };
+
+    Subsurface *subsurface = nullptr;
+
+#ifndef QT_NO_DEBUG
+    static QList<QWaylandSurfacePrivate *> uninitializedSurfaces;
+#endif
+    Q_DECLARE_PUBLIC(QWaylandSurface)
+    Q_DISABLE_COPY(QWaylandSurfacePrivate)
 };
 
 QT_END_NAMESPACE

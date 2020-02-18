@@ -1,39 +1,38 @@
 /****************************************************************************
 **
-** Copyright (C) 2014-2015 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
-** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017-2016 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2017 Klarälvdalens Datakonsult AB (KDAB).
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,40 +41,44 @@
 #ifndef QWAYLANDOUTPUT_H
 #define QWAYLANDOUTPUT_H
 
-#include <QtCompositor/qwaylandexport.h>
+#include <QtWaylandCompositor/qwaylandcompositorextension.h>
+#include <QtWaylandCompositor/QWaylandOutputMode>
+#include <QtCore/QObject>
 
 #include <QObject>
 #include <QRect>
 #include <QSize>
 
-QT_BEGIN_NAMESPACE
-
 struct wl_resource;
 
+QT_BEGIN_NAMESPACE
+
+class QWaylandOutputPrivate;
 class QWaylandCompositor;
 class QWindow;
 class QWaylandSurface;
+class QWaylandView;
 class QWaylandClient;
+class QWaylandOutputSpace;
 
-namespace QtWayland {
-    class Output;
-}
-
-class Q_COMPOSITOR_EXPORT QWaylandOutput : public QObject
+class Q_WAYLAND_COMPOSITOR_EXPORT QWaylandOutput : public QWaylandObject
 {
     Q_OBJECT
-    Q_PROPERTY(QString manufacturer READ manufacturer CONSTANT)
-    Q_PROPERTY(QString model READ model CONSTANT)
+    Q_DECLARE_PRIVATE(QWaylandOutput)
+    Q_PROPERTY(QWaylandCompositor *compositor READ compositor WRITE setCompositor NOTIFY compositorChanged)
+    Q_PROPERTY(QWindow *window READ window WRITE setWindow NOTIFY windowChanged)
+    Q_PROPERTY(QString manufacturer READ manufacturer WRITE setManufacturer NOTIFY manufacturerChanged)
+    Q_PROPERTY(QString model READ model WRITE setModel NOTIFY modelChanged)
     Q_PROPERTY(QPoint position READ position WRITE setPosition NOTIFY positionChanged)
-    Q_PROPERTY(QWaylandOutput::Mode mode READ mode WRITE setMode NOTIFY modeChanged)
     Q_PROPERTY(QRect geometry READ geometry NOTIFY geometryChanged)
     Q_PROPERTY(QRect availableGeometry READ availableGeometry WRITE setAvailableGeometry NOTIFY availableGeometryChanged)
     Q_PROPERTY(QSize physicalSize READ physicalSize WRITE setPhysicalSize NOTIFY physicalSizeChanged)
     Q_PROPERTY(QWaylandOutput::Subpixel subpixel READ subpixel WRITE setSubpixel NOTIFY subpixelChanged)
     Q_PROPERTY(QWaylandOutput::Transform transform READ transform WRITE setTransform NOTIFY transformChanged)
     Q_PROPERTY(int scaleFactor READ scaleFactor WRITE setScaleFactor NOTIFY scaleFactorChanged)
-    Q_PROPERTY(QWindow *window READ window CONSTANT)
+    Q_PROPERTY(bool sizeFollowsWindow READ sizeFollowsWindow WRITE setSizeFollowsWindow NOTIFY sizeFollowsWindowChanged)
     Q_ENUMS(Subpixel Transform)
+
 public:
     enum Subpixel {
       SubpixelUnknown = 0,
@@ -85,6 +88,7 @@ public:
       SubpixelVerticalRgb,
       SubpixelVerticalBgr
     };
+    Q_ENUM(Subpixel)
 
     enum Transform {
         TransformNormal = 0,
@@ -96,35 +100,38 @@ public:
         TransformFlipped180,
         TransformFlipped270
     };
+    Q_ENUM(Transform)
 
-    struct Mode
-    {
-        QSize size;
-        int refreshRate;
-    };
-
-    QWaylandOutput(QWaylandCompositor *compositor, QWindow *window,
-                   const QString &manufacturer, const QString &model);
-    ~QWaylandOutput();
+    QWaylandOutput();
+    QWaylandOutput(QWaylandCompositor *compositor, QWindow *window);
+    ~QWaylandOutput() override;
 
     static QWaylandOutput *fromResource(wl_resource *resource);
-
-    virtual void update();
+    struct ::wl_resource *resourceForClient(QWaylandClient *client) const;
 
     QWaylandCompositor *compositor() const;
+    void setCompositor(QWaylandCompositor *compositor);
+
+    QWindow *window() const;
+    void setWindow(QWindow *window);
 
     QString manufacturer() const;
+    void setManufacturer(const QString &manufacturer);
 
     QString model() const;
+    void setModel(const QString &model);
 
     QPoint position() const;
     void setPosition(const QPoint &pt);
 
-    Mode mode() const;
-    void setMode(const Mode &mode);
+    QList<QWaylandOutputMode> modes() const;
+
+    void addMode(const QWaylandOutputMode &mode, bool preferred = false);
+
+    QWaylandOutputMode currentMode() const;
+    void setCurrentMode(const QWaylandOutputMode &mode);
 
     QRect geometry() const;
-    void setGeometry(const QRect &geometry);
 
     QRect availableGeometry() const;
     void setAvailableGeometry(const QRect &availableGeometry);
@@ -141,27 +148,47 @@ public:
     int scaleFactor() const;
     void setScaleFactor(int scale);
 
-    QWindow *window() const;
+    bool sizeFollowsWindow() const;
+    void setSizeFollowsWindow(bool follow);
 
-    QtWayland::Output *handle();
+    bool physicalSizeFollowsSize() const;
+    void setPhysicalSizeFollowsSize(bool follow);
 
-    QList<QWaylandSurface *> surfaces() const;
+    void frameStarted();
+    void sendFrameCallbacks();
+
+    void surfaceEnter(QWaylandSurface *surface);
+    void surfaceLeave(QWaylandSurface *surface);
+
+    virtual void update();
 
 Q_SIGNALS:
+    void compositorChanged();
+    void windowChanged();
     void positionChanged();
     void geometryChanged();
-    void modeChanged();
+    void modeAdded();
+    void currentModeChanged();
     void availableGeometryChanged();
     void physicalSizeChanged();
     void scaleFactorChanged();
     void subpixelChanged();
     void transformChanged();
+    void sizeFollowsWindowChanged();
+    void physicalSizeFollowsSizeChanged();
+    void manufacturerChanged();
+    void modelChanged();
+    void windowDestroyed();
+
+protected:
+    bool event(QEvent *event) override;
+
+    virtual void initialize();
 
 private:
-    QtWayland::Output *const d_ptr;
+    Q_PRIVATE_SLOT(d_func(), void _q_handleMaybeWindowPixelSizeChanged())
+    Q_PRIVATE_SLOT(d_func(), void _q_handleWindowDestroyed())
 };
-
-Q_DECLARE_METATYPE(QWaylandOutput::Mode)
 
 QT_END_NAMESPACE
 

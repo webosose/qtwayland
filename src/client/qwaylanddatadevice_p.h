@@ -1,42 +1,42 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Klarälvdalens Datakonsult AB (KDAB).
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 Klarälvdalens Datakonsult AB (KDAB).
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandClient module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
+
 
 #ifndef QWAYLANDDATADEVICE_H
 #define QWAYLANDDATADEVICE_H
@@ -52,12 +52,14 @@
 // We mean it.
 //
 
+#include <qtwaylandclientglobal_p.h>
 #include <QObject>
+#include <QPointer>
 #include <QPoint>
 
 #include <QtWaylandClient/private/qwayland-wayland.h>
 
-#ifndef QT_NO_DRAGANDDROP
+QT_REQUIRE_CONFIG(wayland_datadevice);
 
 QT_BEGIN_NAMESPACE
 
@@ -78,35 +80,47 @@ class QWaylandDataDevice : public QObject, public QtWayland::wl_data_device
     Q_OBJECT
 public:
     QWaylandDataDevice(QWaylandDataDeviceManager *manager, QWaylandInputDevice *inputDevice);
-    ~QWaylandDataDevice();
+    ~QWaylandDataDevice() override;
 
     QWaylandDataOffer *selectionOffer() const;
     void invalidateSelectionOffer();
     QWaylandDataSource *selectionSource() const;
     void setSelectionSource(QWaylandDataSource *source);
 
+#if QT_CONFIG(draganddrop)
     QWaylandDataOffer *dragOffer() const;
     void startDrag(QMimeData *mimeData, QWaylandWindow *icon);
     void cancelDrag();
+#endif
 
 protected:
-    void data_device_data_offer(struct ::wl_data_offer *id) Q_DECL_OVERRIDE;
-    void data_device_drop() Q_DECL_OVERRIDE;
-    void data_device_enter(uint32_t serial, struct ::wl_surface *surface, wl_fixed_t x, wl_fixed_t y, struct ::wl_data_offer *id) Q_DECL_OVERRIDE;
-    void data_device_leave() Q_DECL_OVERRIDE;
-    void data_device_motion(uint32_t time, wl_fixed_t x, wl_fixed_t y) Q_DECL_OVERRIDE;
-    void data_device_selection(struct ::wl_data_offer *id) Q_DECL_OVERRIDE;
+    void data_device_data_offer(struct ::wl_data_offer *id) override;
+
+#if QT_CONFIG(draganddrop)
+    void data_device_drop() override;
+    void data_device_enter(uint32_t serial, struct ::wl_surface *surface, wl_fixed_t x, wl_fixed_t y, struct ::wl_data_offer *id) override;
+    void data_device_leave() override;
+    void data_device_motion(uint32_t time, wl_fixed_t x, wl_fixed_t y) override;
+#endif
+    void data_device_selection(struct ::wl_data_offer *id) override;
 
 private Q_SLOTS:
     void selectionSourceCancelled();
+
+#if QT_CONFIG(draganddrop)
     void dragSourceCancelled();
     void dragSourceTargetChanged(const QString &mimeType);
+#endif
 
 private:
-    QWaylandDisplay *m_display;
-    QWaylandInputDevice *m_inputDevice;
-    uint32_t m_enterSerial;
-    QWindow *m_dragWindow;
+#if QT_CONFIG(draganddrop)
+    QPoint calculateDragPosition(int x, int y, QWindow *wnd) const;
+#endif
+
+    QWaylandDisplay *m_display = nullptr;
+    QWaylandInputDevice *m_inputDevice = nullptr;
+    uint32_t m_enterSerial = 0;
+    QPointer<QWindow> m_dragWindow;
     QPoint m_dragPoint;
     QScopedPointer<QWaylandDataOffer> m_dragOffer;
     QScopedPointer<QWaylandDataOffer> m_selectionOffer;
@@ -118,7 +132,5 @@ private:
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_DRAGANDDROP
 
 #endif // QWAYLANDDATADEVICE_H

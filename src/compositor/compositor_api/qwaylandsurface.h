@@ -1,39 +1,38 @@
 /****************************************************************************
 **
-** Copyright (C) 2014-2015 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017-2015 Pier Luigi Fiorini <pierluigi.fiorini@gmail.com>
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the Qt Compositor.
+** This file is part of the QtWaylandCompositor module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** "Redistribution and use in source and binary forms, with or without
-** modification, are permitted provided that the following conditions are
-** met:
-**   * Redistributions of source code must retain the above copyright
-**     notice, this list of conditions and the following disclaimer.
-**   * Redistributions in binary form must reproduce the above copyright
-**     notice, this list of conditions and the following disclaimer in
-**     the documentation and/or other materials provided with the
-**     distribution.
-**   * Neither the name of The Qt Company Ltd nor the names of its
-**     contributors may be used to endorse or promote products derived
-**     from this software without specific prior written permission.
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-**
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,7 +41,9 @@
 #ifndef QWAYLANDSURFACE_H
 #define QWAYLANDSURFACE_H
 
-#include <QtCompositor/qwaylandexport.h>
+#include <QtWaylandCompositor/qtwaylandcompositorglobal.h>
+#include <QtWaylandCompositor/qwaylandcompositorextension.h>
+#include <QtWaylandCompositor/qwaylandclient.h>
 
 #include <QtCore/QScopedPointer>
 #include <QtGui/QImage>
@@ -59,218 +60,115 @@ class QWaylandClient;
 class QWaylandSurfacePrivate;
 class QWaylandCompositor;
 class QWaylandBufferRef;
-class QWaylandSurfaceView;
-class QWaylandSurfaceInterface;
+class QWaylandView;
 class QWaylandSurfaceOp;
-class QWaylandOutput;
+class QWaylandInputMethodControl;
+class QWaylandDrag;
 
-namespace QtWayland {
-class Surface;
-class SurfacePrivate;
-class ExtendedSurface;
-}
-
-class Q_COMPOSITOR_EXPORT QWaylandBufferAttacher
+class QWaylandSurfaceRole
 {
 public:
-    virtual ~QWaylandBufferAttacher() {}
+    QWaylandSurfaceRole(const QByteArray &n) : m_name(n) {}
 
-protected:
-    virtual void attach(const QWaylandBufferRef &ref) = 0;
-    virtual void unmap() = 0;
-
-    friend class QtWayland::Surface;
-};
-
-class QWaylandSurfaceEnterEventPrivate;
-
-class Q_COMPOSITOR_EXPORT QWaylandSurfaceEnterEvent : public QEvent
-{
-public:
-    QWaylandSurfaceEnterEvent(QWaylandOutput *output);
-    ~QWaylandSurfaceEnterEvent();
-
-    QWaylandOutput *output() const;
-
-    static const QEvent::Type WaylandSurfaceEnter;
+    const QByteArray name() { return m_name; }
 
 private:
-    QWaylandSurfaceEnterEventPrivate *d;
+    QByteArray m_name;
 };
 
-class QWaylandSurfaceLeaveEventPrivate;
-
-class Q_COMPOSITOR_EXPORT QWaylandSurfaceLeaveEvent : public QEvent
-{
-public:
-    QWaylandSurfaceLeaveEvent(QWaylandOutput *output);
-    ~QWaylandSurfaceLeaveEvent();
-
-    QWaylandOutput *output() const;
-
-    static const QEvent::Type WaylandSurfaceLeave;
-
-private:
-    QWaylandSurfaceLeaveEventPrivate *d;
-};
-
-class Q_COMPOSITOR_EXPORT QWaylandSurface : public QObject
+class Q_WAYLAND_COMPOSITOR_EXPORT QWaylandSurface : public QWaylandObject
 {
     Q_OBJECT
     Q_DECLARE_PRIVATE(QWaylandSurface)
     Q_PROPERTY(QWaylandClient *client READ client CONSTANT)
     Q_PROPERTY(QSize size READ size NOTIFY sizeChanged)
-    Q_PROPERTY(QWaylandSurface::WindowFlags windowFlags READ windowFlags NOTIFY windowFlagsChanged)
-    Q_PROPERTY(QWaylandSurface::WindowType windowType READ windowType NOTIFY windowTypeChanged)
+    Q_PROPERTY(int bufferScale READ bufferScale NOTIFY bufferScaleChanged)
     Q_PROPERTY(Qt::ScreenOrientation contentOrientation READ contentOrientation NOTIFY contentOrientationChanged)
-    Q_PROPERTY(QString className READ className NOTIFY classNameChanged)
-    Q_PROPERTY(QString title READ title NOTIFY titleChanged)
-    Q_PROPERTY(Qt::ScreenOrientations orientationUpdateMask READ orientationUpdateMask NOTIFY orientationUpdateMaskChanged)
-    Q_PROPERTY(QWindow::Visibility visibility READ visibility WRITE setVisibility NOTIFY visibilityChanged)
-    Q_PROPERTY(QWaylandSurface *transientParent READ transientParent)
-    Q_PROPERTY(QPointF transientOffset READ transientOffset)
-
-    Q_ENUMS(WindowFlag WindowType)
-    Q_FLAGS(WindowFlag WindowFlags)
+    Q_PROPERTY(QWaylandSurface::Origin origin READ origin NOTIFY originChanged)
+    Q_PROPERTY(bool hasContent READ hasContent NOTIFY hasContentChanged)
+    Q_PROPERTY(bool cursorSurface READ isCursorSurface WRITE markAsCursorSurface NOTIFY cursorSurfaceChanged)
 
 public:
-    enum WindowFlag {
-        OverridesSystemGestures     = 0x0001,
-        StaysOnTop                  = 0x0002,
-        BypassWindowManager         = 0x0004
+    enum Origin {
+        OriginTopLeft,
+        OriginBottomLeft
     };
-    Q_DECLARE_FLAGS(WindowFlags, WindowFlag)
+    Q_ENUM(Origin)
 
-    enum WindowType {
-        None,
-        Toplevel,
-        Transient,
-        Popup
-    };
+    QWaylandSurface();
+    QWaylandSurface(QWaylandCompositor *compositor, QWaylandClient *client, uint id, int version);
+    ~QWaylandSurface() override;
 
-    enum Type {
-        Invalid,
-        Shm,
-        Texture
-    };
-
-    QWaylandSurface(wl_client *client, quint32 id, int version, QWaylandCompositor *compositor);
-    virtual ~QWaylandSurface();
+    Q_INVOKABLE void initialize(QWaylandCompositor *compositor, QWaylandClient *client, uint id, int version);
+    bool isInitialized() const;
 
     QWaylandClient *client() const;
+    ::wl_client *waylandClient() const;
 
-    QWaylandSurface *parentSurface() const;
-    QLinkedList<QWaylandSurface *> subSurfaces() const;
-    void addInterface(QWaylandSurfaceInterface *interface);
-    void removeInterface(QWaylandSurfaceInterface *interface);
+    bool setRole(QWaylandSurfaceRole *role, wl_resource *errorResource, uint32_t errorCode);
+    QWaylandSurfaceRole *role() const;
 
-    Type type() const;
-    bool isYInverted() const;
-
-    bool visible() const;
-    bool isMapped() const;
+    bool hasContent() const;
 
     QSize size() const;
-    Q_INVOKABLE void requestSize(const QSize &size);
+    int bufferScale() const;
 
-    Qt::ScreenOrientations orientationUpdateMask() const;
     Qt::ScreenOrientation contentOrientation() const;
 
-    WindowFlags windowFlags() const;
-
-    WindowType windowType() const;
-
-    QWindow::Visibility visibility() const;
-    void setVisibility(QWindow::Visibility visibility);
-    Q_INVOKABLE void sendOnScreenVisibilityChange(bool visible); // Compat
-
-    QWaylandSurface *transientParent() const;
-
-    QPointF transientOffset() const;
-
-    QtWayland::Surface *handle();
-
-    QByteArray authenticationToken() const;
-    QVariantMap windowProperties() const;
-    void setWindowProperty(const QString &name, const QVariant &value);
+    Origin origin() const;
 
     QWaylandCompositor *compositor() const;
-
-    QWaylandOutput *mainOutput() const;
-    void setMainOutput(QWaylandOutput *mainOutput);
-
-    QList<QWaylandOutput *> outputs() const;
-
-    QString className() const;
-
-    QString title() const;
-
-    bool hasInputPanelSurface() const;
-
-    bool transientInactive() const;
 
     bool inputRegionContains(const QPoint &p) const;
 
     Q_INVOKABLE void destroy();
-    Q_INVOKABLE void destroySurface();
-    Q_INVOKABLE void ping();
+    Q_INVOKABLE bool isDestroyed() const;
 
-    void ref();
-    void setMapped(bool mapped);
+    Q_INVOKABLE void frameStarted();
+    Q_INVOKABLE void sendFrameCallbacks();
 
-    void setBufferAttacher(QWaylandBufferAttacher *attacher);
-    QWaylandBufferAttacher *bufferAttacher() const;
+    QWaylandView *primaryView() const;
+    void setPrimaryView(QWaylandView *view);
 
-    QList<QWaylandSurfaceView *> views() const;
-    QList<QWaylandSurfaceInterface *> interfaces() const;
-
-    bool sendInterfaceOp(QWaylandSurfaceOp &op);
+    QList<QWaylandView *> views() const;
 
     static QWaylandSurface *fromResource(::wl_resource *resource);
+    struct wl_resource *resource() const;
+
+    void markAsCursorSurface(bool cursorSurface);
+    bool isCursorSurface() const;
+
+#if QT_CONFIG(im)
+    QWaylandInputMethodControl *inputMethodControl() const;
+#endif
 
 public Q_SLOTS:
+#if QT_CONFIG(clipboard)
     void updateSelection();
+#endif
 
 protected:
-    QWaylandSurface(QWaylandSurfacePrivate *dptr);
+    QWaylandSurface(QWaylandSurfacePrivate &dptr);
 
 Q_SIGNALS:
-    void mapped();
-    void unmapped();
+    void hasContentChanged();
     void damaged(const QRegion &rect);
     void parentChanged(QWaylandSurface *newParent, QWaylandSurface *oldParent);
+    void childAdded(QWaylandSurface *child);
     void sizeChanged();
-    void windowPropertyChanged(const QString &name, const QVariant &value);
-    void windowFlagsChanged(WindowFlags flags);
-    void windowTypeChanged(WindowType type);
+    void bufferScaleChanged();
+    void offsetForNextFrame(const QPoint &offset);
     void contentOrientationChanged();
-    void orientationUpdateMaskChanged();
-    void extendedSurfaceReady();
-    void classNameChanged();
-    void titleChanged();
-    void raiseRequested();
-    void lowerRequested();
-    void visibilityChanged();
-    void pong();
     void surfaceDestroyed();
+    void originChanged();
+    void subsurfacePositionChanged(const QPoint &position);
+    void subsurfacePlaceAbove(QWaylandSurface *sibling);
+    void subsurfacePlaceBelow(QWaylandSurface *sibling);
+    void dragStarted(QWaylandDrag *drag);
+    void cursorSurfaceChanged();
 
     void configure(bool hasBuffer);
     void redraw();
-
-    friend class QWaylandSurfaceView;
-    friend class QWaylandSurfaceInterface;
-    friend class QtWayland::Surface;
-};
-
-class QWaylandUnmapLockPrivate;
-class Q_COMPOSITOR_EXPORT QWaylandUnmapLock
-{
-public:
-    QWaylandUnmapLock(QWaylandSurface *surface);
-    ~QWaylandUnmapLock();
-
-private:
-    QWaylandUnmapLockPrivate *const d;
 };
 
 QT_END_NAMESPACE

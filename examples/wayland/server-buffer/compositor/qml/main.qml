@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: http://www.qt-project.org/legal
 **
-** This file is part of the examples of the Qt Toolkit.
+** This file is part of the examples of the Qt Wayland module
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -38,46 +48,45 @@
 **
 ****************************************************************************/
 
-import QtQuick 2.0
-import QtCompositor 1.0
+import QtQuick 2.6
+import QtWayland.Compositor 1.0
+import QtQuick.Window 2.2
 
-Item {
-    id: root
+import com.theqtcompany.sharebufferextension 1.0
 
-    property var serverBufferContainerComponent : Qt.createComponent("qrc:/qml/ServerBufferContainer.qml")
+import QtQuick 2.6
+import QtQuick.Window 2.2
+import QtWayland.Compositor 1.0
 
-    Image {
-        id: background
-        anchors.fill: parent
-        fillMode: Image.Tile
-        source: "qrc:/images/background.jpg"
-        smooth: true
-    }
-
-    Row {
-        id: row
-        anchors.fill: parent
-    }
-
-    function windowAdded(window) {
-        var item = compositor.item(window);
-        item.parent = root;
-        item.surfaceDestroyed.connect(item.destroy);
-    }
-
-    function windowResized(window) {
-    }
-
-    function removeWindow(window) {
-    }
-
-    function serverBufferItemCreated(serverBufferItem) {
-        console.log("ServerBuffer item" + serverBufferItem);
-        if (serverBufferContainerComponent.status != Component.Ready) {
-            console.log("Error loading component:", component.errorString());
-            return;
+WaylandCompositor {
+    WaylandOutput {
+        sizeFollowsWindow: true
+        window: Window {
+            width: 1024
+            height: 768
+            visible: true
+            Image {
+                id: surfaceArea
+                anchors.fill: parent
+                fillMode: Image.Tile
+                source: "qrc:/images/background.png"
+                smooth: false
+            }
         }
-        var container = serverBufferContainerComponent.createObject(row);
-        container.setServerBuffer(serverBufferItem);
     }
+    Component {
+        id: chromeComponent
+        ShellSurfaceItem {
+            onSurfaceDestroyed: destroy()
+        }
+    }
+
+    WlShell {
+        onWlShellSurfaceCreated:
+            chromeComponent.createObject(surfaceArea, { "shellSurface": shellSurface } );
+    }
+
+    ShareBufferExtension {
+    }
+
 }
