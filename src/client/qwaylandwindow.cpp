@@ -203,10 +203,16 @@ void QWaylandWindow::initWindow()
     if (QScreen *s = window()->screen())
         setOrientationMask(s->orientationUpdateMask());
     setWindowFlags(window()->flags());
+#ifdef NO_WEBOS_PLATFORM
     if (window()->geometry().isEmpty())
         setGeometry_helper(QRect(QPoint(), QSize(500,500)));
     else
         setGeometry_helper(window()->geometry());
+#else
+    // In the webOS, the window with the default geometry is shown for a while
+    // if the default geometry is set when window's geometry is empty.
+    setGeometry_helper(window()->geometry());
+#endif
     setMask(window()->mask());
 #ifdef NO_WEBOS_PLATFORM
     // Disable this line in webOS since we have our own window state
