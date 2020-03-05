@@ -78,6 +78,8 @@ public:
 
     virtual ClientBuffer *createBufferFor(struct ::wl_resource *buffer) = 0;
 
+    virtual bool isSecured(struct ::wl_resource *buffer) { return false; }
+
 protected:
     QWaylandCompositor *m_compositor = nullptr;
 };
