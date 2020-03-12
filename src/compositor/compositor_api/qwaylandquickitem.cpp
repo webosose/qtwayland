@@ -296,7 +296,8 @@ public:
                 }
 
                 auto texture = buffer.toOpenGLTexture();
-                m_sgTex = surfaceItem->window()->createTextureFromId(texture->textureId() , QSize(surfaceItem->width(), surfaceItem->height()), opt);
+                auto size = surface->size();
+                m_sgTex = surfaceItem->window()->createTextureFromId(texture->textureId() , size, opt);
             }
         }
         emit textureChanged();
