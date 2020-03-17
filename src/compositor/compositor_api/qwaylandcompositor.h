@@ -107,7 +107,7 @@ public:
     QList<QWaylandSurface *> surfaces() const;
     QList<QWaylandSurface *> surfacesForClient(QWaylandClient* client) const;
 
-    Q_INVOKABLE QWaylandOutput *outputFor(QWindow *window) const;
+    Q_INVOKABLE QWaylandOutput *outputFor(const QWindow *window) const;
 
     QWaylandOutput *defaultOutput() const;
     void setDefaultOutput(QWaylandOutput *output);

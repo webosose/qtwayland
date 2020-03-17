@@ -533,6 +533,11 @@ void QWaylandOutput::addMode(const QWaylandOutputMode &mode, bool preferred)
         return;
     }
 
+    if (d->modes.indexOf(mode) >= 0) {
+        qWarning() << "Mode already exists, size:" << mode.size() << "refreshRate:" << mode.refreshRate();
+        return;
+    }
+
     d->modes.append(mode);
 
     if (preferred)

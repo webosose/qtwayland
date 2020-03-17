@@ -719,7 +719,7 @@ QList<QWaylandSurface *> QWaylandCompositor::surfaces() const
 /*!
  * Returns the QWaylandOutput that is connected to the given \a window.
  */
-QWaylandOutput *QWaylandCompositor::outputFor(QWindow *window) const
+QWaylandOutput *QWaylandCompositor::outputFor(const QWindow *window) const
 {
     Q_D(const QWaylandCompositor);
     foreach (QWaylandOutput *output, d->outputs) {
