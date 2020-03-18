@@ -93,7 +93,6 @@ QWaylandWindow::QWaylandWindow(QWindow *window)
 #ifndef NO_WEBOS_PLATFORM
     // In webOS, platform window initialization should be done upon construction
     initWindow();
-    mDisplay->flushRequests();
 #endif
 }
 
@@ -415,10 +414,10 @@ void QWaylandWindow::setVisible(bool visible)
             activePopups << this;
 #ifdef NO_WEBOS_PLATFORM
         initWindow();
-        mDisplay->flushRequests();
 #else
         // In webOS, we don't recreate window when it becomes visible
 #endif
+        mDisplay->flushRequests();
 
         setGeometry(window()->geometry());
         // Don't flush the events here, or else the newly visible window may start drawing, but since
