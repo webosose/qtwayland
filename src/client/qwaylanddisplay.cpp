@@ -74,6 +74,7 @@
 #include <QtGui/private/qguiapplication_p.h>
 
 #include <QtCore/QDebug>
+#include <QUrlQuery>
 
 #include <errno.h>
 
@@ -280,7 +281,19 @@ void QWaylandDisplay::registry_global(uint32_t id, const QString &interface, uin
         mScreens.append(screen);
         // We need to get the output events before creating surfaces
         forceRoundTrip();
+#ifndef NO_WEBOS_PLATFORM
+        // webOS specific way to determine the screen to use:
+        // 1) DISPLAY_ID is set by the application manager meaning the display ID to use.
+        // 2) wl_output has display information in its "mode" value.
+        // 3) Find a wl_output that has the same display_id in its "mode" with DISPLAY_ID.
+        static QByteArray displayId = qgetenv("DISPLAY_ID");
+        QUrlQuery displayInfo(screen->model());
+        bool primary = (displayId == displayInfo.queryItemValue(QLatin1String("display_id")));
+        qInfo() << "Adding screen" << screen << "for wl_output" << id << "with displayId of" << displayId << "details:" << screen->model() << primary;
+        mWaylandIntegration->screenAdded(screen, primary);
+#else
         mWaylandIntegration->screenAdded(screen);
+#endif
     } else if (interface == QStringLiteral("wl_compositor")) {
         mCompositorVersion = qMin((int)version, 3);
         mCompositor.init(registry, id, mCompositorVersion);
