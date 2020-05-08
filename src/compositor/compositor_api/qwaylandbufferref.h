@@ -72,6 +72,7 @@ public:
     bool isNull() const;
     bool hasBuffer() const;
     bool hasContent() const;
+    bool hasSecuredContent() const;
     bool isDestroyed() const;
     bool operator==(const QWaylandBufferRef &ref);
     bool operator!=(const QWaylandBufferRef &ref);

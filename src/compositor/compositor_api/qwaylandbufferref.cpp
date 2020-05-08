@@ -171,6 +171,11 @@ bool QWaylandBufferRef::hasContent() const
     return QtWayland::ClientBuffer::hasContent(d->buffer);
 }
 
+bool QWaylandBufferRef::hasSecuredContent() const
+{
+    return QtWayland::ClientBuffer::hasSecuredContent(d->buffer);
+}
+
 /*!
  * Returns true if this QWaylandBufferRef references a buffer that
  * has been destroyed. Otherwise returns false.
