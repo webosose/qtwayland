@@ -1,0 +1,8 @@
+Open Source Software Package:
+- name: webOSOSE-qtwayland
+  version: 5.12.4
+  source: https://github.com/webosose/qtwayland
+  license:
+  - QT Commercial License
+  - LGPL-3.0
+  - GPL-2.0
