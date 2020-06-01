@@ -55,6 +55,7 @@ struct wl_resource;
 QT_BEGIN_NAMESPACE
 
 class QOpenGLTexture;
+class QQuickItem;
 
 namespace QtWayland
 {
@@ -110,6 +111,8 @@ public:
 
     quintptr lockNativeBuffer();
     void unlockNativeBuffer(quintptr handle);
+
+    bool directUpdate(QQuickItem *item, uint32_t zpos) const;
 
 private:
     explicit QWaylandBufferRef(QtWayland::ClientBuffer *buffer);

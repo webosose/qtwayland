@@ -73,6 +73,9 @@ class Q_WAYLAND_COMPOSITOR_EXPORT QWaylandQuickItem : public QQuickItem
     Q_PROPERTY(QWaylandOutput *output READ output WRITE setOutput NOTIFY outputChanged)
     Q_PROPERTY(bool bufferLocked READ isBufferLocked WRITE setBufferLocked NOTIFY bufferLockedChanged)
     Q_PROPERTY(bool allowDiscardFrontBuffer READ allowDiscardFrontBuffer WRITE setAllowDiscardFrontBuffer NOTIFY allowDiscardFrontBufferChanged)
+
+    Q_PROPERTY(bool directUpdateOnPlane READ directUpdateOnPlane WRITE setDirectUpdateOnPlane NOTIFY directUpdateOnPlaneChanged)
+
 public:
     QWaylandQuickItem(QQuickItem *parent = nullptr);
     ~QWaylandQuickItem() override;
@@ -124,6 +127,10 @@ public:
     void setAllowDiscardFrontBuffer(bool discard);
 
     Q_INVOKABLE void setPrimary();
+
+    virtual bool directUpdateOnPlane() const;
+    virtual void setDirectUpdateOnPlane(bool enable);
+    virtual uint32_t planeZpos() const { return 0; }
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -188,6 +195,8 @@ Q_SIGNALS:
     void outputChanged();
     void bufferLockedChanged();
     void allowDiscardFrontBufferChanged();
+    void directUpdateOnPlaneChanged();
+
 protected:
     QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data) override;
 

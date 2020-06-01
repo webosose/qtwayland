@@ -109,9 +109,12 @@ public:
     static bool hasContent(ClientBuffer *buffer) { return buffer && buffer->waylandBufferHandle(); }
     static bool hasSecuredContent(ClientBuffer *buffer) { return buffer && buffer->isSecured(); }
 
-protected:
     void ref();
     void deref();
+
+    virtual bool directUpdate(QQuickItem *item, uint32_t zpos) { return false; }
+
+protected:
     void sendRelease();
     void setDestroyed();
 
