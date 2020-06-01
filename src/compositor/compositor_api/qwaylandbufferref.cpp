@@ -309,6 +309,18 @@ void QWaylandBufferRef::unlockNativeBuffer(quintptr handle)
     d->buffer->unlockNativeBuffer(handle);
 }
 
+ /*!
+  *  Try to render directly on specific plane. Return true if the rendering succueeds.
+  *  Then, Update with scenegraph can be skipped in updatePaintNode for derived class of QWaylandQuickItem.
+  */
+bool QWaylandBufferRef::directUpdate(QQuickItem *item, uint32_t plane) const
+{
+    if (d->nullOrDestroyed())
+        return false;
+
+    return d->buffer->directUpdate(item, plane);
+}
+
 #endif
 
 QT_END_NAMESPACE

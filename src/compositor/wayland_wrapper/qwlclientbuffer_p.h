@@ -109,9 +109,14 @@ public:
     static bool hasContent(ClientBuffer *buffer) { return buffer && buffer->waylandBufferHandle(); }
     static bool hasProtectedContent(ClientBuffer *buffer) { return buffer && buffer->isProtected(); }
 
-protected:
+    // Render directly on specific plane. Return true if the rendering succueeds.
+    virtual bool directUpdate(QQuickItem *item, uint32_t plane) { return false; }
+
+    // If the buffer is used a scanout buffer, it should be held by screen until next flip.
     void ref();
     void deref();
+
+protected:
     void sendRelease();
     virtual void setDestroyed();
 

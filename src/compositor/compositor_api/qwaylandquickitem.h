@@ -188,6 +188,7 @@ Q_SIGNALS:
     void outputChanged();
     void bufferLockedChanged();
     void allowDiscardFrontBufferChanged();
+
 protected:
     QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data) override;
 
