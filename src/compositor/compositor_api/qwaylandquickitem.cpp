@@ -1302,7 +1302,7 @@ QSGNode *QWaylandQuickItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeDat
     const QRectF rect = invertY ? QRectF(0, height(), width(), -height())
                                 : QRectF(0, 0, width(), height());
 
-    if (ref.bufferFormatEgl() == QWaylandBufferRef::BufferFormatEgl_Null) {
+    if (!ref.isSharedMemory() && ref.bufferFormatEgl() == QWaylandBufferRef::BufferFormatEgl_Null) {
         delete oldNode;
         return nullptr;
     }
