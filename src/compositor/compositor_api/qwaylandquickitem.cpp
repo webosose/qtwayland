@@ -1302,12 +1302,14 @@ QSGNode *QWaylandQuickItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeDat
     const QRectF rect = invertY ? QRectF(0, height(), width(), -height())
                                 : QRectF(0, 0, width(), height());
 
-    if (!ref.isSharedMemory() && ref.bufferFormatEgl() == QWaylandBufferRef::BufferFormatEgl_Null) {
-        delete oldNode;
-        return nullptr;
-    }
-
     if (ref.isSharedMemory() || bufferTypes[ref.bufferFormatEgl()].canProvideTexture) {
+        if (oldNode && !d->paintByProvider) {
+            // Need to re-create a node
+            delete oldNode;
+            oldNode = nullptr;
+        }
+        d->paintByProvider = true;
+
         // This case could covered by the more general path below, but this is more efficient (especially when using ShaderEffect items).
         QSGSimpleTextureNode *node = static_cast<QSGSimpleTextureNode *>(oldNode);
 
@@ -1333,11 +1335,12 @@ QSGNode *QWaylandQuickItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeDat
     } else {
         Q_ASSERT(!d->provider);
 
-        //TODO: In somecase, bufferTypes might be changed.
-        if (d->provider) {
-           delete oldNode;
-           oldNode = nullptr;
+        if (oldNode && d->paintByProvider) {
+            // Need to re-create a node
+            delete oldNode;
+            oldNode = nullptr;
         }
+        d->paintByProvider = false;
 
         QSGGeometryNode *node = static_cast<QSGGeometryNode *>(oldNode);
 

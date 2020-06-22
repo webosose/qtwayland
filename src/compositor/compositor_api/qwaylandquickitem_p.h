@@ -171,6 +171,7 @@ public:
     bool focusOnClick = true;
     bool sizeFollowsSurface = true;
     bool belowParent = false;
+    bool paintByProvider = false;
     QPoint hoverPos;
     QMatrix4x4 lastMatrix;
 
