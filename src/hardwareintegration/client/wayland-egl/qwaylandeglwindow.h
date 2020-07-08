@@ -62,6 +62,7 @@ public:
     void ensureSize() override;
 
     void updateSurface(bool create);
+    void updateSurface(bool create, const QRect &rect);
     virtual void setGeometry(const QRect &rect) override;
     QRect contentsRect() const;
 

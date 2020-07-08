@@ -95,12 +95,13 @@ void QWaylandEglWindow::ensureSize()
 
 void QWaylandEglWindow::setGeometry(const QRect &rect)
 {
-    QWaylandWindow::setGeometry(rect);
     // If the surface was invalidated through invalidateSurface() and
     // we're now getting a resize we don't want to create it again.
     // Just resize the wl_egl_window, the EGLSurface will be created
     // the next time makeCurrent is called.
-    updateSurface(false);
+    updateSurface(false, rect);
+
+    QWaylandWindow::setGeometry(rect);
 }
 
 qreal QWaylandEglWindow::devicePixelRatio() const
@@ -110,8 +111,12 @@ qreal QWaylandEglWindow::devicePixelRatio() const
 
 void QWaylandEglWindow::updateSurface(bool create)
 {
+    updateSurface(create, geometry());
+}
+
+void QWaylandEglWindow::updateSurface(bool create, const QRect &rect)
+{
     QMargins margins = frameMargins();
-    QRect rect = geometry();
     QSize sizeWithMargins = (rect.size()*devicePixelRatio() + QSize(margins.left() + margins.right(), margins.top() + margins.bottom())) * scale();
 
     // wl_egl_windows must have both width and height > 0
