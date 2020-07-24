@@ -1004,6 +1004,11 @@ void QWaylandQuickItem::updateSize()
 {
     Q_D(QWaylandQuickItem);
 
+    if (surface() && !surface()->size().isValid()) {
+        qWarning() << "No update on item size as the surface size is invalid";
+        return;
+    }
+
     QSize size(0, 0);
     if (surface())
         size = surface()->size() * (d->scaleFactor() / surface()->bufferScale());

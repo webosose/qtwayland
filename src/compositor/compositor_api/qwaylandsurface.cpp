@@ -184,6 +184,7 @@ bool QWaylandSurfacePrivate::hasUninitializedSurface()
 void QWaylandSurfacePrivate::surface_destroy_resource(Resource *)
 {
     Q_Q(QWaylandSurface);
+    emit q->aboutToBeDestroyed();
     notifyViewsAboutDestruction();
 
     destroyed = true;
@@ -198,9 +199,14 @@ void QWaylandSurfacePrivate::surface_destroy(Resource *resource)
 
 void QWaylandSurfacePrivate::surface_attach(Resource *, struct wl_resource *buffer, int x, int y)
 {
+    Q_Q(QWaylandSurface);
+
     pending.buffer = QWaylandBufferRef(getBuffer(buffer));
     pending.offset = QPoint(x, y);
     pending.newlyAttached = true;
+
+    if (!pending.buffer.hasContent())
+        emit q->nullBufferAttached();
 }
 
 void QWaylandSurfacePrivate::surface_damage(Resource *, int32_t x, int32_t y, int32_t width, int32_t height)

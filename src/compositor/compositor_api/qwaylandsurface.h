@@ -172,6 +172,9 @@ Q_SIGNALS:
 
     void configure(bool hasBuffer);
     void redraw();
+
+    void aboutToBeDestroyed();
+    void nullBufferAttached();
 };
 
 QT_END_NAMESPACE
