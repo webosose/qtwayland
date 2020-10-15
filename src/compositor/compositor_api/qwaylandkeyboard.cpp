@@ -177,6 +177,7 @@ XKBKeymap::Data* XKBKeymap::createXKBKeymap(const QWaylandKeymap *keymap)
                 if (map_area != MAP_FAILED)
                     strcpy(map_area, str);
             }
+            free(str);
         }
     }
 
