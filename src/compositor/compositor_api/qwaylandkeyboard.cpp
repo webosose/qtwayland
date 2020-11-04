@@ -364,10 +364,8 @@ void QWaylandKeyboardPrivate::sendKeyEvent(uint code, uint32_t state, bool repea
 #else
     uint key = code;
 #endif
-    if (focusResource) {
+    if (focusResource)
         send_key(focusResource->handle, serial, time, key, state);
-        updateModifierState(code, state, repeat);
-    }
 }
 
 void QWaylandKeyboardPrivate::modifiers(uint32_t serial, uint32_t mods_depressed,
