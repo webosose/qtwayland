@@ -134,7 +134,7 @@ QWaylandDisplay::QWaylandDisplay(QWaylandIntegration *waylandIntegration)
     mDisplay = wl_display_connect(nullptr);
     if (!mDisplay) {
         qErrnoWarning(errno, "Failed to create wl_display");
-        return;
+        exitWithError();
     }
 
     struct ::wl_registry *registry = wl_display_get_registry(mDisplay);
