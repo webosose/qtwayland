@@ -1213,7 +1213,8 @@ void QWaylandQuickItem::updateWindow()
         // Release current buffer and it will not be set since advance() is not called anymore.
         d->view->discardCurrentBuffer();
         // one shot task to clean up the provider with buffer reference
-        d->connectedWindow->scheduleRenderJob(new QWaylandQuickItemCleanup(d->provider), QQuickWindow::AfterSwapStage);
+        if (d->connectedWindow)
+            d->connectedWindow->scheduleRenderJob(new QWaylandQuickItemCleanup(d->provider), QQuickWindow::AfterSwapStage);
         d->provider = nullptr;
     }
 
