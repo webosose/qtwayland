@@ -44,6 +44,7 @@
 
 #include "qwaylandquicksurface.h"
 #include "qwaylandquickcompositor.h"
+#include "qwaylandquickitem.h"
 #include <QtWaylandCompositor/qwaylandbufferref.h>
 #include <QtWaylandCompositor/QWaylandView>
 #include <QtWaylandCompositor/private/qwaylandsurface_p.h>
