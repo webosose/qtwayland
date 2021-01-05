@@ -166,7 +166,7 @@ void QWaylandIntegration::initIntegration()
 #endif
 #if QT_CONFIG(draganddrop)
     if (!mDrag)
-        mDrag.reset(createPlatformDrag(mDisplay.data()));
+        mDrag.reset(new QWaylandDrag(mDisplay.data()));
 #endif
 
     QString icStr = QPlatformInputContextFactory::requested();
@@ -334,13 +334,6 @@ QWaylandScreen *QWaylandIntegration::createPlatformScreen(QWaylandDisplay *wayla
 {
    return new QWaylandScreen(waylandDisplay, version, id);
 }
-
-#if QT_CONFIG(draganddrop)
-QWaylandDrag *QWaylandIntegration::createPlatformDrag(QWaylandDisplay *waylandDisplay) const
-{
-   return new QWaylandDrag(waylandDisplay);
-}
-#endif
 
 QWaylandClientBufferIntegration *QWaylandIntegration::clientBufferIntegration() const
 {
