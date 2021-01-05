@@ -168,7 +168,7 @@ void QWaylandIntegration::initIntegration()
 #endif
 #if QT_CONFIG(draganddrop)
     if (!mDrag)
-        mDrag.reset(QWaylandIntegration::createPlatformDrag(mDisplay.data()));
+        mDrag.reset(createPlatformDrag(mDisplay.data()));
 #endif
 
     QString icStr = QPlatformInputContextFactory::requested();
@@ -187,7 +187,7 @@ void QWaylandIntegration::initIntegration()
     }
 #if QT_CONFIG(accessibility)
     if (!mAccessibility)
-        mAccessibility.reset(QWaylandIntegration::createPlatformAccessibility());
+        mAccessibility.reset(createPlatformAccessibility());
 #endif
 }
 
