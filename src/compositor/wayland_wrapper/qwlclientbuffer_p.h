@@ -116,7 +116,7 @@ public:
 
 protected:
     void sendRelease();
-    void setDestroyed();
+    virtual void setDestroyed();
 
     struct ::wl_resource *m_buffer = nullptr;
     QRegion m_damage;
