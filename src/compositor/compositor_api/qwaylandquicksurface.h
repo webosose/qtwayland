@@ -67,6 +67,8 @@ public:
 
     Q_DECL_DEPRECATED bool clientRenderingEnabled() const;
     Q_DECL_DEPRECATED void setClientRenderingEnabled(bool enabled);
+protected:
+    QWaylandQuickSurface(QWaylandQuickSurfacePrivate &dptr);
 
 Q_SIGNALS:
     void useTextureAlphaChanged();

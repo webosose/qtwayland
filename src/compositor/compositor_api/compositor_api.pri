@@ -92,6 +92,7 @@ qtHaveModule(quick):qtConfig(opengl) {
     HEADERS += \
         compositor_api/qwaylandquickcompositor.h \
         compositor_api/qwaylandquicksurface.h \
+        compositor_api/qwaylandquicksurface_p.h \
         compositor_api/qwaylandquickoutput.h \
         compositor_api/qwaylandquickitem.h \
         compositor_api/qwaylandquickitem_p.h \
