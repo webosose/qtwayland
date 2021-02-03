@@ -170,10 +170,14 @@ bool QWaylandBufferRef::hasContent() const
 {
     return QtWayland::ClientBuffer::hasContent(d->buffer);
 }
-
-bool QWaylandBufferRef::hasSecuredContent() const
+/*!
+ * Returns true if this QWaylandBufferRef references a buffer that has protected content. Otherwise returns false.
+ *
+ * \sa hasContent()
+ */
+bool QWaylandBufferRef::hasProtectedContent() const
 {
-    return QtWayland::ClientBuffer::hasSecuredContent(d->buffer);
+    return QtWayland::ClientBuffer::hasProtectedContent(d->buffer);
 }
 
 /*!

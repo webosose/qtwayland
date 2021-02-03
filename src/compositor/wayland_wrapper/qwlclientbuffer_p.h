@@ -96,7 +96,7 @@ public:
     virtual void setCommitted(QRegion &damage);
     bool isDestroyed() { return m_destroyed; }
 
-    virtual bool isSecured() { return false; }
+    virtual bool isProtected() { return false; }
 
     inline struct ::wl_resource *waylandBufferHandle() const { return m_buffer; }
 
@@ -107,7 +107,7 @@ public:
 #endif
 
     static bool hasContent(ClientBuffer *buffer) { return buffer && buffer->waylandBufferHandle(); }
-    static bool hasSecuredContent(ClientBuffer *buffer) { return buffer && buffer->isSecured(); }
+    static bool hasProtectedContent(ClientBuffer *buffer) { return buffer && buffer->isProtected(); }
 
     void ref();
     void deref();

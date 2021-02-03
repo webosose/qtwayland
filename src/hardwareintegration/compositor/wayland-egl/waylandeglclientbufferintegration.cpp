@@ -268,15 +268,15 @@ void WaylandEglClientBufferIntegrationPrivate::initEglTexture(WaylandEglClientBu
         break;
     }
 
-    bool secured = buffer->isSecured();
     for (int i = 0; i < planes; i++) {
         EGLint attribs[5] = { EGL_WAYLAND_PLANE_WL, i, EGL_NONE };
-        if (secured) {
+#ifdef EGL_EXT_protected_content
+        if (buffer->isProtected()) {
             attribs[2] = EGL_PROTECTED_CONTENT_EXT;
             attribs[3] = EGL_TRUE;
             attribs[4] = EGL_NONE;
         }
-
+#endif
         EGLImageKHR image = egl_create_image(egl_display,
                                              EGL_NO_CONTEXT,
                                              EGL_WAYLAND_BUFFER_WL,
@@ -577,8 +577,10 @@ QOpenGLTexture *WaylandEglClientBuffer::toOpenGlTexture(int plane)
         texture->bind();
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         p->gl_egl_image_target_texture_2d(target, d->egl_images[plane]);
-        if (isSecured())
+#ifdef EGL_EXT_protected_content
+        if (isProtected())
             glTexParameteri(target, GL_TEXTURE_PROTECTED_EXT, GL_TRUE);
+#endif
     }
     return texture;
 }
@@ -592,13 +594,14 @@ void WaylandEglClientBuffer::setCommitted(QRegion &damage)
     }
 }
 
-bool WaylandEglClientBuffer::isSecured()
+bool WaylandEglClientBuffer::isProtected()
 {
     if (m_integration && m_buffer)
-        return m_integration->isSecured(waylandBufferHandle());
+        return m_integration->isProtected(m_buffer);
 
     return false;
 }
+
 
 QWaylandSurface::Origin WaylandEglClientBuffer::origin() const
 {

@@ -79,7 +79,7 @@ public:
     void unlockNativeBuffer(quintptr native_buffer) const override;
     QOpenGLTexture *toOpenGlTexture(int plane) override;
     void setCommitted(QRegion &damage) override;
-    bool isSecured() override;
+    bool isProtected() override;
 
 private:
     friend class WaylandEglClientBufferIntegration;
