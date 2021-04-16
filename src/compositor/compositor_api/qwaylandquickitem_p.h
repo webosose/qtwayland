@@ -180,8 +180,6 @@ public:
     QWaylandSurface::Origin origin = QWaylandSurface::OriginTopLeft;
     QPointer<QObject> subsurfaceHandler;
     QVector<QWaylandSeat *> touchingSeats;
-
-    bool directUpdateOnPlane = false;
 };
 
 QT_END_NAMESPACE

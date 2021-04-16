@@ -309,14 +309,6 @@ void QWaylandBufferRef::unlockNativeBuffer(quintptr handle)
     d->buffer->unlockNativeBuffer(handle);
 }
 
-bool QWaylandBufferRef::directUpdate(QQuickItem *item, uint32_t zpos) const
-{
-    if (d->nullOrDestroyed())
-        return false;
-
-    return d->buffer->directUpdate(item, zpos);
-}
-
 #endif
 
 QT_END_NAMESPACE

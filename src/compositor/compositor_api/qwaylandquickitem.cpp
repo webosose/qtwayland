@@ -61,9 +61,6 @@
 #include <QtQuick/QSGSimpleTextureNode>
 #include <QtQuick/QQuickWindow>
 
-#include <QtQuick/private/qquickwindow_p.h>
-#include <QtQuick/private/qsgrenderer_p.h>
-
 #include <QtCore/QMutexLocker>
 #include <QtCore/QMutex>
 #include <QtCore/QRunnable>
@@ -1316,14 +1313,6 @@ QSGNode *QWaylandQuickItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeDat
     const QRectF rect = invertY ? QRectF(0, height(), width(), -height())
                                 : QRectF(0, 0, width(), height());
 
-    if (directUpdateOnPlane() && ref.directUpdate(this, planeZpos())) {
-        QQuickWindowPrivate *d = QQuickWindowPrivate::get(window());
-        emit d->renderer->sceneGraphChanged();
-        // This is needed when rendering mode is changed from general texture to direct update
-        delete oldNode;
-        return nullptr;
-    }
-
     if (ref.isSharedMemory() || bufferTypes[ref.bufferFormatEgl()].canProvideTexture) {
         if (oldNode && !d->paintByProvider) {
             // Need to re-create a node
@@ -1444,22 +1433,6 @@ void QWaylandQuickItem::raise()
     QQuickItem *top = parent->childItems().last();
     if (this != top)
         stackAfter(top);
-}
-
-bool QWaylandQuickItem::directUpdateOnPlane() const
-{
-    Q_D(const QWaylandQuickItem);
-    return d->directUpdateOnPlane;
-}
-
-void QWaylandQuickItem::setDirectUpdateOnPlane(bool enable)
-{
-    Q_D(QWaylandQuickItem);
-
-    if (d->directUpdateOnPlane != enable) {
-        d->directUpdateOnPlane = enable;
-        emit directUpdateOnPlaneChanged();
-    }
 }
 
 void QWaylandQuickItem::sendMouseMoveEvent(const QPointF &position, QWaylandSeat *seat)
